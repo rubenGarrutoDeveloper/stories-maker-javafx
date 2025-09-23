@@ -466,43 +466,16 @@ public class Main extends Application {
         // Update UI immediately
         appState.setRecordingState(ApplicationState.RecordingState.RECORDING);
 
-        // Start recording asynchronously
+        // Start recording and capture audio in a single flow
         audioRecordingService.startRecording()
                 .thenCompose(v -> {
-                    // Start capturing audio data
+                    // Start capturing audio data - this will complete when recording stops
                     return audioRecordingService.captureAudio();
                 })
                 .thenAccept(audioData -> {
-                    // This will be called when recording stops
+                    // This is called when recording naturally completes (single transcription path)
                     Platform.runLater(() -> {
-                        if (audioData.length > 0) {
-                            showNotification("Recording completed: " + audioData.length + " bytes captured", "SUCCESS");
-                            transcriptionArea.appendText("[Processing " + audioData.length + " bytes...]\n");
-
-                            // Transcribe audio using Whisper API
-                            openAIService.transcribeAudio(audioData)
-                                    .thenAccept(result -> {
-                                        Platform.runLater(() -> {
-                                            if (result.isSuccess()) {
-                                                transcriptionArea.appendText(result.getText() + "\n\n");
-                                                showNotification("Transcription completed!", "SUCCESS");
-                                            } else {
-                                                transcriptionArea.appendText("[Transcription failed: " + result.getMessage() + "]\n\n");
-                                                showNotification("Transcription failed: " + result.getMessage(), "ERROR");
-                                            }
-                                        });
-                                    })
-                                    .exceptionally(throwable -> {
-                                        Platform.runLater(() -> {
-                                            transcriptionArea.appendText("[Transcription error: " + throwable.getMessage() + "]\n\n");
-                                            showNotification("Transcription error", "ERROR");
-                                        });
-                                        return null;
-                                    });
-                        } else {
-                            showNotification("No audio data captured", "WARNING");
-                        }
-
+                        processAudioData(audioData);
                         appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                     });
                 })
@@ -520,38 +493,9 @@ public class Main extends Application {
             // Update UI to show processing state
             appState.setRecordingState(ApplicationState.RecordingState.STOPPING);
 
+            // Stop recording - this will trigger the completion of captureAudio() in startRecording()
+            // No need to call transcription here as it will be handled by the completion handler
             audioRecordingService.stopRecording()
-                    .thenAccept(audioData -> {
-                        Platform.runLater(() -> {
-                            if (audioData.length > 0) {
-                                showNotification("Recording stopped: " + audioData.length + " bytes captured", "SUCCESS");
-                                transcriptionArea.appendText("[Processing " + audioData.length + " bytes...]\n");
-
-                                // Transcribe audio using Whisper API
-                                openAIService.transcribeAudio(audioData)
-                                        .thenAccept(result -> {
-                                            Platform.runLater(() -> {
-                                                if (result.isSuccess()) {
-                                                    transcriptionArea.appendText(result.getText() + "\n\n");
-                                                    showNotification("Transcription completed!", "SUCCESS");
-                                                } else {
-                                                    transcriptionArea.appendText("[Transcription failed: " + result.getMessage() + "]\n\n");
-                                                    showNotification("Transcription failed: " + result.getMessage(), "ERROR");
-                                                }
-                                            });
-                                        })
-                                        .exceptionally(throwable -> {
-                                            Platform.runLater(() -> {
-                                                transcriptionArea.appendText("[Transcription error: " + throwable.getMessage() + "]\n\n");
-                                                showNotification("Transcription error", "ERROR");
-                                            });
-                                            return null;
-                                        });
-                            }
-
-                            appState.setRecordingState(ApplicationState.RecordingState.IDLE);
-                        });
-                    })
                     .exceptionally(throwable -> {
                         Platform.runLater(() -> {
                             showNotification("Failed to stop recording: " + throwable.getMessage(), "ERROR");
@@ -559,6 +503,38 @@ public class Main extends Application {
                         });
                         return null;
                     });
+        }
+    }
+
+    /**
+     * Processes audio data and handles transcription (single method to avoid duplication)
+     */
+    private void processAudioData(byte[] audioData) {
+        if (audioData.length > 0) {
+            showNotification("Recording completed: " + audioData.length + " bytes captured", "SUCCESS");
+
+            // Transcribe audio using Whisper API
+            openAIService.transcribeAudio(audioData)
+                    .thenAccept(result -> {
+                        Platform.runLater(() -> {
+                            if (result.isSuccess()) {
+                                transcriptionArea.appendText(result.getText() + "\n\n");
+                                showNotification("Transcription completed!", "SUCCESS");
+                            } else {
+                                transcriptionArea.appendText("[Transcription failed: " + result.getMessage() + "]\n\n");
+                                showNotification("Transcription failed: " + result.getMessage(), "ERROR");
+                            }
+                        });
+                    })
+                    .exceptionally(throwable -> {
+                        Platform.runLater(() -> {
+                            transcriptionArea.appendText("[Transcription error: " + throwable.getMessage() + "]\n\n");
+                            showNotification("Transcription error", "ERROR");
+                        });
+                        return null;
+                    });
+        } else {
+            showNotification("No audio data captured", "WARNING");
         }
     }
 
