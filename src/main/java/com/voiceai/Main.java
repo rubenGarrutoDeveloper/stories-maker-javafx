@@ -3,6 +3,7 @@ package com.voiceai;
 import com.voiceai.model.Conversation;
 import com.voiceai.service.AudioRecordingService;
 import com.voiceai.service.OpenAIService;
+import com.voiceai.service.RealTimeTranscriptionService;
 import com.voiceai.state.ApplicationState;
 import com.voiceai.ui.UIConstants;
 import javafx.application.Application;
@@ -27,6 +28,7 @@ public class Main extends Application {
     // Services
     private OpenAIService openAIService;
     private AudioRecordingService audioRecordingService;
+    private RealTimeTranscriptionService realTimeTranscriptionService;
 
     // Application State
     private ApplicationState appState;
@@ -50,15 +52,18 @@ public class Main extends Application {
     private Button clearButton;
     private Label chatStatusLabel;
     private Label tokenCounterLabel;
+    private Label transcriptionStatusLabel;
 
-    // State
-    // Note: State is now managed by ApplicationState class
+    // Real-time transcription state
+    private CheckBox realTimeCheckBox;
+    private boolean useRealTimeTranscription = true;
 
     @Override
     public void start(Stage primaryStage) {
         // Initialize services and state
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
+        realTimeTranscriptionService = new RealTimeTranscriptionService(audioRecordingService, openAIService);
         appState = new ApplicationState();
         currentConversation = new Conversation("StorieS Maker Chat");
 
@@ -90,6 +95,11 @@ public class Main extends Application {
 
         // Initial UI state update
         updateUIState();
+
+        // Shutdown hook for cleanup
+        primaryStage.setOnCloseRequest(event -> {
+            shutdown();
+        });
     }
 
     /**
@@ -149,12 +159,26 @@ public class Main extends Application {
     private VBox createTranscriptionPanel() {
         VBox panel = new VBox(UIConstants.PANEL_SPACING);
 
-        // Header
+        // Header with status
         HBox header = new HBox(UIConstants.CONTROL_SPACING);
         header.setAlignment(Pos.CENTER_LEFT);
         Label headerLabel = new Label(UIConstants.TRANSCRIPT_HEADER);
         headerLabel.setStyle(UIConstants.HEADER_STYLE);
-        header.getChildren().add(headerLabel);
+
+        transcriptionStatusLabel = new Label("");
+        transcriptionStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
+        // Real-time transcription checkbox
+        realTimeCheckBox = new CheckBox("Real-time");
+        realTimeCheckBox.setSelected(useRealTimeTranscription);
+        realTimeCheckBox.setStyle("-fx-font-size: 12px;");
+        realTimeCheckBox.setOnAction(e -> {
+            useRealTimeTranscription = realTimeCheckBox.isSelected();
+            showNotification("Real-time transcription " +
+                    (useRealTimeTranscription ? "enabled" : "disabled"), "INFO");
+        });
+
+        header.getChildren().addAll(headerLabel, transcriptionStatusLabel, realTimeCheckBox);
 
         // Control buttons
         HBox controls = new HBox(UIConstants.CONTROL_SPACING);
@@ -465,23 +489,45 @@ public class Main extends Application {
 
         // Update UI immediately
         appState.setRecordingState(ApplicationState.RecordingState.RECORDING);
+        updateTranscriptionStatus("Starting recording...");
 
-        // Start recording and capture audio in a single flow
+        // Start recording and capture audio
         audioRecordingService.startRecording()
                 .thenCompose(v -> {
-                    // Start capturing audio data - this will complete when recording stops
+                    // If real-time transcription is enabled, start it
+                    if (useRealTimeTranscription) {
+                        Platform.runLater(() -> {
+                            updateTranscriptionStatus("Real-time transcription active");
+                            realTimeTranscriptionService.startRealTimeTranscription(
+                                    this::onRealTimeTranscriptionReceived,
+                                    this::onRealTimeTranscriptionError
+                            );
+                        });
+                    } else {
+                        Platform.runLater(() -> updateTranscriptionStatus("Recording..."));
+                    }
+
+                    // Start capturing audio data
                     return audioRecordingService.captureAudio();
                 })
                 .thenAccept(audioData -> {
-                    // This is called when recording naturally completes (single transcription path)
+                    // This is called when recording completes
                     Platform.runLater(() -> {
-                        processAudioData(audioData);
+                        if (!useRealTimeTranscription) {
+                            // Process the entire audio at once if not using real-time
+                            updateTranscriptionStatus("Processing final transcription...");
+                            processAudioData(audioData);
+                        } else {
+                            // Real-time transcription already handled the audio
+                            updateTranscriptionStatus("Recording completed");
+                        }
                         appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                     });
                 })
                 .exceptionally(throwable -> {
                     Platform.runLater(() -> {
                         showNotification("Recording failed: " + throwable.getMessage(), "ERROR");
+                        updateTranscriptionStatus("Recording failed");
                         appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                     });
                     return null;
@@ -492,13 +538,34 @@ public class Main extends Application {
         if (audioRecordingService.isRecording()) {
             // Update UI to show processing state
             appState.setRecordingState(ApplicationState.RecordingState.STOPPING);
+            updateTranscriptionStatus("Stopping recording...");
 
-            // Stop recording - this will trigger the completion of captureAudio() in startRecording()
-            // No need to call transcription here as it will be handled by the completion handler
+            // Stop real-time transcription if active
+            if (realTimeTranscriptionService.isActive()) {
+                realTimeTranscriptionService.stopRealTimeTranscription();
+            }
+
+            // Stop recording
             audioRecordingService.stopRecording()
+                    .thenAccept(audioData -> {
+                        Platform.runLater(() -> {
+                            if (useRealTimeTranscription) {
+                                // Real-time already processed everything
+                                int chunks = realTimeTranscriptionService.getChunksProcessed();
+                                showNotification("Recording stopped. Processed " + chunks + " chunks", "SUCCESS");
+                                updateTranscriptionStatus("Completed (" + chunks + " chunks)");
+                            } else {
+                                // Process the entire recording now
+                                updateTranscriptionStatus("Processing transcription...");
+                                processAudioData(audioData);
+                            }
+                            appState.setRecordingState(ApplicationState.RecordingState.IDLE);
+                        });
+                    })
                     .exceptionally(throwable -> {
                         Platform.runLater(() -> {
                             showNotification("Failed to stop recording: " + throwable.getMessage(), "ERROR");
+                            updateTranscriptionStatus("Stop failed");
                             appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                         });
                         return null;
@@ -507,11 +574,48 @@ public class Main extends Application {
     }
 
     /**
-     * Processes audio data and handles transcription (single method to avoid duplication)
+     * Handles real-time transcription text chunks
+     */
+    private void onRealTimeTranscriptionReceived(String text) {
+        Platform.runLater(() -> {
+            transcriptionArea.appendText(text);
+            // Auto-scroll to bottom
+            transcriptionArea.setScrollTop(Double.MAX_VALUE);
+
+            // Update status with recording duration
+            double duration = audioRecordingService.getCurrentRecordingDuration();
+            updateTranscriptionStatus(String.format("Recording... (%.1fs)", duration));
+        });
+    }
+
+    /**
+     * Handles real-time transcription errors
+     */
+    private void onRealTimeTranscriptionError(String error) {
+        Platform.runLater(() -> {
+            System.err.println("Real-time transcription error: " + error);
+            updateTranscriptionStatus("Error: " + error);
+        });
+    }
+
+    /**
+     * Updates the transcription status label
+     */
+    private void updateTranscriptionStatus(String status) {
+        if (status == null || status.isEmpty()) {
+            transcriptionStatusLabel.setText("");
+        } else {
+            transcriptionStatusLabel.setText("• " + status);
+        }
+    }
+
+    /**
+     * Processes audio data and handles transcription (for non-real-time mode)
      */
     private void processAudioData(byte[] audioData) {
         if (audioData.length > 0) {
-            showNotification("Recording completed: " + audioData.length + " bytes captured", "SUCCESS");
+            showNotification("Processing " + audioData.length + " bytes of audio", "INFO");
+            updateTranscriptionStatus("Transcribing...");
 
             // Transcribe audio using Whisper API
             openAIService.transcribeAudio(audioData)
@@ -520,9 +624,11 @@ public class Main extends Application {
                             if (result.isSuccess()) {
                                 transcriptionArea.appendText(result.getText() + "\n\n");
                                 showNotification("Transcription completed!", "SUCCESS");
+                                updateTranscriptionStatus("Transcription complete");
                             } else {
                                 transcriptionArea.appendText("[Transcription failed: " + result.getMessage() + "]\n\n");
                                 showNotification("Transcription failed: " + result.getMessage(), "ERROR");
+                                updateTranscriptionStatus("Transcription failed");
                             }
                         });
                     })
@@ -530,11 +636,13 @@ public class Main extends Application {
                         Platform.runLater(() -> {
                             transcriptionArea.appendText("[Transcription error: " + throwable.getMessage() + "]\n\n");
                             showNotification("Transcription error", "ERROR");
+                            updateTranscriptionStatus("Error");
                         });
                         return null;
                     });
         } else {
             showNotification("No audio data captured", "WARNING");
+            updateTranscriptionStatus("");
         }
     }
 
@@ -742,6 +850,23 @@ public class Main extends Application {
                 showNotification("Chat cleared", "SUCCESS");
             }
         });
+    }
+
+    /**
+     * Cleanup resources on application shutdown
+     */
+    private void shutdown() {
+        // Stop any active recording
+        if (audioRecordingService.isRecording()) {
+            audioRecordingService.forceStop();
+        }
+
+        // Stop real-time transcription service
+        if (realTimeTranscriptionService != null) {
+            realTimeTranscriptionService.shutdown();
+        }
+
+        System.out.println("Application shutdown complete");
     }
 
     public static void main(String[] args) {

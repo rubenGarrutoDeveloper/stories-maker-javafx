@@ -5,6 +5,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class AudioRecordingService {
 
@@ -27,6 +29,10 @@ public class AudioRecordingService {
     private CompletableFuture<byte[]> recordingTask;
     private final AtomicBoolean isRecording;
     private volatile RecordingState currentState;
+
+    // Thread-safe access to audio data
+    private final ReadWriteLock audioDataLock = new ReentrantReadWriteLock();
+    private byte[] currentAudioBuffer = new byte[0];
 
     public AudioRecordingService() {
         this.audioFormat = new AudioFormat(
@@ -69,6 +75,14 @@ public class AudioRecordingService {
                 // Initialize audio buffer
                 recordedAudioStream = new ByteArrayOutputStream();
 
+                // Clear the current buffer
+                audioDataLock.writeLock().lock();
+                try {
+                    currentAudioBuffer = new byte[0];
+                } finally {
+                    audioDataLock.writeLock().unlock();
+                }
+
                 // Start recording
                 targetDataLine.start();
                 isRecording.set(true);
@@ -83,6 +97,21 @@ public class AudioRecordingService {
                 throw new RuntimeException("Failed to start recording: " + e.getMessage(), e);
             }
         });
+    }
+
+    /**
+     * Gets the current audio data without stopping the recording
+     * This method is thread-safe and returns a copy of the current audio buffer
+     * @return Current audio data as byte array
+     */
+    public byte[] getCurrentAudioData() {
+        audioDataLock.readLock().lock();
+        try {
+            // Return a copy to prevent external modification
+            return currentAudioBuffer.clone();
+        } finally {
+            audioDataLock.readLock().unlock();
+        }
     }
 
     /**
@@ -129,6 +158,7 @@ public class AudioRecordingService {
     /**
      * Starts the recording process that captures audio data
      * Should be called after startRecording() completes successfully
+     * This version also updates the current audio buffer for real-time access
      * @return CompletableFuture that completes when recording is stopped
      */
     public CompletableFuture<byte[]> captureAudio() {
@@ -140,7 +170,18 @@ public class AudioRecordingService {
                     int bytesRead = targetDataLine.read(buffer, 0, buffer.length);
 
                     if (bytesRead > 0 && recordedAudioStream != null) {
+                        // Write to the main stream
                         recordedAudioStream.write(buffer, 0, bytesRead);
+
+                        // Update the current audio buffer for real-time access
+                        audioDataLock.writeLock().lock();
+                        try {
+                            // Get current stream data
+                            byte[] newAudioData = recordedAudioStream.toByteArray();
+                            currentAudioBuffer = newAudioData;
+                        } finally {
+                            audioDataLock.writeLock().unlock();
+                        }
                     }
                 }
 
@@ -174,6 +215,24 @@ public class AudioRecordingService {
      */
     public AudioFormat getAudioFormat() {
         return audioFormat;
+    }
+
+    /**
+     * Gets the current recording duration in seconds
+     */
+    public double getCurrentRecordingDuration() {
+        audioDataLock.readLock().lock();
+        try {
+            if (currentAudioBuffer.length == 0) {
+                return 0.0;
+            }
+
+            // Calculate duration based on audio format
+            int bytesPerSecond = (int)(SAMPLE_RATE * CHANNELS * (SAMPLE_SIZE_IN_BITS / 8));
+            return (double) currentAudioBuffer.length / bytesPerSecond;
+        } finally {
+            audioDataLock.readLock().unlock();
+        }
     }
 
     /**
@@ -262,6 +321,14 @@ public class AudioRecordingService {
             if (recordedAudioStream != null) {
                 recordedAudioStream.close();
                 recordedAudioStream = null;
+            }
+
+            // Clear the current buffer
+            audioDataLock.writeLock().lock();
+            try {
+                currentAudioBuffer = new byte[0];
+            } finally {
+                audioDataLock.writeLock().unlock();
             }
 
         } catch (Exception e) {
