@@ -1,5 +1,6 @@
 package com.voiceai;
 
+import com.voiceai.model.Conversation;
 import com.voiceai.service.AudioRecordingService;
 import com.voiceai.service.OpenAIService;
 import com.voiceai.state.ApplicationState;
@@ -11,7 +12,15 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 public class Main extends Application {
 
@@ -21,6 +30,9 @@ public class Main extends Application {
 
     // Application State
     private ApplicationState appState;
+
+    // Conversation Management
+    private Conversation currentConversation;
 
     // UI Components
     private TextField apiKeyField;
@@ -36,6 +48,8 @@ public class Main extends Application {
     private Button sendButton;
     private Button insertTranscriptButton;
     private Button clearButton;
+    private Label chatStatusLabel;
+    private Label tokenCounterLabel;
 
     // State
     // Note: State is now managed by ApplicationState class
@@ -46,6 +60,7 @@ public class Main extends Application {
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
         appState = new ApplicationState();
+        currentConversation = new Conversation("StorieS Maker Chat");
 
         // Set up state change listener
         appState.addStateChangeListener(this::onStateChanged);
@@ -104,7 +119,11 @@ public class Main extends Application {
         connectionStatus = new Label(UIConstants.DISCONNECTED_STATUS);
         connectionStatus.setStyle(UIConstants.ERROR_STATUS_STYLE);
 
-        apiKeyBox.getChildren().addAll(apiKeyField, testConnectionButton, connectionStatus);
+        // Token counter label
+        tokenCounterLabel = new Label("Tokens: 0");
+        tokenCounterLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #666;");
+
+        apiKeyBox.getChildren().addAll(apiKeyField, testConnectionButton, connectionStatus, tokenCounterLabel);
         apiSection.getChildren().addAll(titleLabel, apiKeyBox);
 
         return apiSection;
@@ -171,12 +190,16 @@ public class Main extends Application {
     private VBox createChatPanel() {
         VBox panel = new VBox(UIConstants.PANEL_SPACING);
 
-        // Header
+        // Header with status
         HBox header = new HBox(UIConstants.CONTROL_SPACING);
         header.setAlignment(Pos.CENTER_LEFT);
         Label headerLabel = new Label(UIConstants.CHAT_HEADER);
         headerLabel.setStyle(UIConstants.HEADER_STYLE);
-        header.getChildren().add(headerLabel);
+
+        chatStatusLabel = new Label("");
+        chatStatusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #666;");
+
+        header.getChildren().addAll(headerLabel, chatStatusLabel);
 
         // Chat area
         chatArea = new TextArea();
@@ -326,6 +349,60 @@ public class Main extends Application {
     }
 
     /**
+     * Updates the chat status label based on application state
+     */
+    private void updateChatStatus() {
+        String message = "";
+        String color = "#666";
+
+        switch (appState.getChatState()) {
+            case SENDING:
+                message = "Sending message...";
+                color = UIConstants.WARNING_COLOR;
+                break;
+            case RECEIVING:
+                message = "Waiting for response...";
+                color = UIConstants.WARNING_COLOR;
+                break;
+            case STREAMING:
+                message = "Receiving response...";
+                color = UIConstants.SUCCESS_COLOR;
+                break;
+            case ERROR:
+                message = "Error: " + appState.getChatStatusMessage();
+                color = UIConstants.ERROR_COLOR;
+                break;
+            case IDLE:
+            default:
+                message = appState.getChatStatusMessage();
+                break;
+        }
+
+        chatStatusLabel.setText(message);
+        chatStatusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + color + ";");
+    }
+
+    /**
+     * Updates the token counter
+     */
+    private void updateTokenCounter() {
+        int tokens = appState.getTokensUsedInSession();
+        tokenCounterLabel.setText("Tokens: " + tokens);
+
+        // Change color based on usage
+        String color = "#666";
+        if (tokens > 5000) {
+            color = UIConstants.ERROR_COLOR;
+        } else if (tokens > 2000) {
+            color = UIConstants.WARNING_COLOR;
+        } else if (tokens > 0) {
+            color = UIConstants.SUCCESS_COLOR;
+        }
+
+        tokenCounterLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + color + ";");
+    }
+
+    /**
      * Shows a temporary notification (simple console output for now)
      */
     private void showNotification(String message, String type) {
@@ -340,6 +417,12 @@ public class Main extends Application {
         // Update connection status
         updateConnectionStatus();
 
+        // Update chat status
+        updateChatStatus();
+
+        // Update token counter
+        updateTokenCounter();
+
         // Enable/disable recording button based on API key validity
         recButton.setDisable(!appState.isApiKeyValid());
 
@@ -350,9 +433,12 @@ public class Main extends Application {
             recButton.setStyle(UIConstants.DISABLED_BUTTON_STYLE);
         }
 
-        // Enable/disable send button based on API key validity
-        sendButton.setDisable(!appState.isApiKeyValid());
-        if (appState.isApiKeyValid()) {
+        // Enable/disable send button based on API key validity and chat state
+        boolean canSendMessage = appState.isApiKeyValid() && !appState.isChatBusy();
+        sendButton.setDisable(!canSendMessage);
+        messageField.setDisable(appState.isChatBusy());
+
+        if (canSendMessage) {
             sendButton.setStyle(UIConstants.SEND_BUTTON_STYLE);
         } else {
             sendButton.setStyle(UIConstants.createButtonStyle(UIConstants.GRAY_COLOR));
@@ -505,8 +591,32 @@ public class Main extends Application {
     }
 
     private void saveTranscription() {
-        // TODO: Implement save functionality
-        System.out.println("Saving transcription...");
+        String transcription = transcriptionArea.getText().trim();
+        if (transcription.isEmpty()) {
+            showNotification("No transcription to save", "WARNING");
+            return;
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Save Transcription");
+        fileChooser.setInitialFileName("transcription_" +
+                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".txt");
+
+        // Set extension filters
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Text Files", "*.txt"),
+                new FileChooser.ExtensionFilter("All Files", "*.*")
+        );
+
+        File file = fileChooser.showSaveDialog(null);
+        if (file != null) {
+            try (FileWriter writer = new FileWriter(file)) {
+                writer.write(transcription);
+                showNotification("Transcription saved successfully!", "SUCCESS");
+            } catch (IOException e) {
+                showNotification("Failed to save transcription: " + e.getMessage(), "ERROR");
+            }
+        }
     }
 
     private void selectAllTranscription() {
@@ -514,29 +624,148 @@ public class Main extends Application {
     }
 
     private void loadTranscription() {
-        // TODO: Implement load functionality
-        System.out.println("Loading transcription...");
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle("Load Transcription");
+
+        // Set extension filters
+        fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Text Files", "*.txt"),
+                new FileChooser.ExtensionFilter("All Files", "*.*")
+        );
+
+        File file = fileChooser.showOpenDialog(null);
+        if (file != null) {
+            try {
+                String content = Files.readString(file.toPath());
+                transcriptionArea.setText(content);
+                showNotification("Transcription loaded successfully!", "SUCCESS");
+            } catch (IOException e) {
+                showNotification("Failed to load transcription: " + e.getMessage(), "ERROR");
+            }
+        }
     }
 
     private void sendMessage() {
         String message = messageField.getText().trim();
-        if (!message.isEmpty()) {
-            // TODO: Implement ChatGPT integration
-            chatArea.appendText("You: " + message + "\n\n");
-            messageField.clear();
-            System.out.println("Sending message: " + message);
+        if (message.isEmpty() || !appState.isApiKeyValid() || appState.isChatBusy()) {
+            return;
         }
+
+        // Clear the input field immediately
+        messageField.clear();
+
+        // Add user message to conversation and display
+        currentConversation.addUserMessage(message);
+        appendChatMessage("You", message);
+
+        // Update state to sending
+        appState.setChatState(ApplicationState.ChatState.SENDING, "Sending message...");
+
+        // Send to OpenAI with streaming
+        openAIService.sendStreamingChatCompletion(
+                currentConversation,
+                this::onStreamingChunk,
+                this::onStreamingComplete
+        ).exceptionally(throwable -> {
+            Platform.runLater(() -> {
+                appState.setChatState(ApplicationState.ChatState.ERROR, throwable.getMessage());
+                showNotification("Failed to send message: " + throwable.getMessage(), "ERROR");
+            });
+            return null;
+        });
+    }
+
+    /**
+     * Handles streaming response chunks
+     */
+    private void onStreamingChunk(String chunk) {
+        Platform.runLater(() -> {
+            // Update state to streaming if not already
+            if (!appState.isChatStreaming()) {
+                appState.setChatState(ApplicationState.ChatState.STREAMING, "Receiving response...");
+                // Start the assistant message
+                chatArea.appendText("ChatGPT: ");
+            }
+
+            // Append the chunk to chat area
+            chatArea.appendText(chunk);
+
+            // Auto-scroll to bottom
+            chatArea.setScrollTop(Double.MAX_VALUE);
+        });
+    }
+
+    /**
+     * Handles completion of streaming response
+     */
+    private void onStreamingComplete(OpenAIService.ChatCompletionResult result) {
+        Platform.runLater(() -> {
+            if (result.isSuccess()) {
+                // Add assistant message to conversation
+                currentConversation.addAssistantMessage(result.getContent());
+
+                // Add newlines for formatting
+                chatArea.appendText("\n\n");
+
+                // Update token usage
+                appState.addTokensUsed(result.getTokensUsed());
+
+                // Reset state to idle
+                appState.setChatState(ApplicationState.ChatState.IDLE, "");
+
+                showNotification("Response received (" + result.getTokensUsed() + " tokens)", "SUCCESS");
+            } else {
+                // Handle error
+                appState.setChatState(ApplicationState.ChatState.ERROR, result.getMessage());
+                chatArea.appendText("\n[Error: " + result.getMessage() + "]\n\n");
+                showNotification("Chat error: " + result.getMessage(), "ERROR");
+            }
+
+            // Auto-scroll to bottom
+            chatArea.setScrollTop(Double.MAX_VALUE);
+        });
+    }
+
+    /**
+     * Appends a message to the chat area with proper formatting
+     */
+    private void appendChatMessage(String sender, String message) {
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+        chatArea.appendText(sender + " (" + timestamp + "): " + message + "\n\n");
+        chatArea.setScrollTop(Double.MAX_VALUE);
     }
 
     private void insertTranscript() {
-        String transcript = transcriptionArea.getText();
+        String transcript = transcriptionArea.getText().trim();
         if (!transcript.isEmpty()) {
-            messageField.setText(transcript);
+            // If there's already text in the message field, add a space
+            String currentText = messageField.getText();
+            if (!currentText.isEmpty()) {
+                messageField.setText(currentText + " " + transcript);
+            } else {
+                messageField.setText(transcript);
+            }
+            messageField.requestFocus();
+            messageField.positionCaret(messageField.getText().length());
         }
     }
 
     private void clearChat() {
-        chatArea.clear();
+        // Show confirmation dialog
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Clear Chat");
+        alert.setHeaderText("Clear conversation history?");
+        alert.setContentText("This will clear all messages in the current conversation. This action cannot be undone.");
+
+        alert.showAndWait().ifPresent(response -> {
+            if (response == ButtonType.OK) {
+                chatArea.clear();
+                currentConversation.clearConversation();
+                appState.resetTokenCounter();
+                appState.setChatState(ApplicationState.ChatState.IDLE, "");
+                showNotification("Chat cleared", "SUCCESS");
+            }
+        });
     }
 
     public static void main(String[] args) {

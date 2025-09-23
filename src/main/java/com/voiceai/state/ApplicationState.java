@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 /**
  * Manages the application's state including API key validation,
- * recording status, and state change notifications
+ * recording status, chat status, and state change notifications
  */
 public class ApplicationState {
 
@@ -24,12 +24,23 @@ public class ApplicationState {
         ERROR
     }
 
+    public enum ChatState {
+        IDLE,
+        SENDING,
+        RECEIVING,
+        STREAMING,
+        ERROR
+    }
+
     // State variables
     private boolean apiKeyValid = false;
     private RecordingState recordingState = RecordingState.IDLE;
     private ConnectionState connectionState = ConnectionState.DISCONNECTED;
+    private ChatState chatState = ChatState.IDLE;
     private String connectionMessage = "Disconnected";
+    private String chatStatusMessage = "";
     private String lastError = null;
+    private int tokensUsedInSession = 0;
 
     // State change listeners
     private final List<Consumer<ApplicationState>> stateChangeListeners = new ArrayList<>();
@@ -109,6 +120,48 @@ public class ApplicationState {
     }
 
     /**
+     * Gets the current chat state
+     */
+    public ChatState getChatState() {
+        return chatState;
+    }
+
+    /**
+     * Sets the chat state
+     */
+    public void setChatState(ChatState state) {
+        setChatState(state, "");
+    }
+
+    /**
+     * Sets the chat state with a status message
+     */
+    public void setChatState(ChatState state, String statusMessage) {
+        boolean changed = false;
+
+        if (this.chatState != state) {
+            this.chatState = state;
+            changed = true;
+        }
+
+        if (!statusMessage.equals(this.chatStatusMessage)) {
+            this.chatStatusMessage = statusMessage;
+            changed = true;
+        }
+
+        if (changed) {
+            notifyStateChange();
+        }
+    }
+
+    /**
+     * Gets the chat status message
+     */
+    public String getChatStatusMessage() {
+        return chatStatusMessage;
+    }
+
+    /**
      * Sets an error message
      */
     public void setError(String error) {
@@ -131,6 +184,29 @@ public class ApplicationState {
             lastError = null;
             notifyStateChange();
         }
+    }
+
+    /**
+     * Adds tokens used to the session total
+     */
+    public void addTokensUsed(int tokens) {
+        this.tokensUsedInSession += tokens;
+        notifyStateChange();
+    }
+
+    /**
+     * Gets total tokens used in this session
+     */
+    public int getTokensUsedInSession() {
+        return tokensUsedInSession;
+    }
+
+    /**
+     * Resets the token counter
+     */
+    public void resetTokenCounter() {
+        this.tokensUsedInSession = 0;
+        notifyStateChange();
     }
 
     // Convenience methods for recording state
@@ -167,6 +243,33 @@ public class ApplicationState {
         return connectionState == ConnectionState.ERROR;
     }
 
+    // Convenience methods for chat state
+    public boolean isChatIdle() {
+        return chatState == ChatState.IDLE;
+    }
+
+    public boolean isChatSending() {
+        return chatState == ChatState.SENDING;
+    }
+
+    public boolean isChatReceiving() {
+        return chatState == ChatState.RECEIVING;
+    }
+
+    public boolean isChatStreaming() {
+        return chatState == ChatState.STREAMING;
+    }
+
+    public boolean hasChatError() {
+        return chatState == ChatState.ERROR;
+    }
+
+    public boolean isChatBusy() {
+        return chatState == ChatState.SENDING ||
+                chatState == ChatState.RECEIVING ||
+                chatState == ChatState.STREAMING;
+    }
+
     /**
      * Adds a state change listener
      */
@@ -201,8 +304,11 @@ public class ApplicationState {
         apiKeyValid = false;
         recordingState = RecordingState.IDLE;
         connectionState = ConnectionState.DISCONNECTED;
+        chatState = ChatState.IDLE;
         connectionMessage = "Disconnected";
+        chatStatusMessage = "";
         lastError = null;
+        tokensUsedInSession = 0;
         notifyStateChange();
     }
 
@@ -215,8 +321,11 @@ public class ApplicationState {
                 "apiKeyValid=" + apiKeyValid +
                 ", recordingState=" + recordingState +
                 ", connectionState=" + connectionState +
+                ", chatState=" + chatState +
                 ", connectionMessage='" + connectionMessage + '\'' +
+                ", chatStatusMessage='" + chatStatusMessage + '\'' +
                 ", lastError='" + lastError + '\'' +
+                ", tokensUsedInSession=" + tokensUsedInSession +
                 '}';
     }
 }
