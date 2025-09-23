@@ -2,6 +2,7 @@ package com.voiceai;
 
 import com.voiceai.service.AudioRecordingService;
 import com.voiceai.service.OpenAIService;
+import com.voiceai.state.ApplicationState;
 import com.voiceai.ui.UIConstants;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -17,6 +18,9 @@ public class Main extends Application {
     // Services
     private OpenAIService openAIService;
     private AudioRecordingService audioRecordingService;
+
+    // Application State
+    private ApplicationState appState;
 
     // UI Components
     private TextField apiKeyField;
@@ -34,14 +38,17 @@ public class Main extends Application {
     private Button clearButton;
 
     // State
-    private boolean isApiKeyValid = false;
-    private boolean isCurrentlyRecording = false;
+    // Note: State is now managed by ApplicationState class
 
     @Override
     public void start(Stage primaryStage) {
-        // Initialize services
+        // Initialize services and state
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
+        appState = new ApplicationState();
+
+        // Set up state change listener
+        appState.addStateChangeListener(this::onStateChanged);
 
         primaryStage.setTitle(UIConstants.APP_TITLE);
 
@@ -66,8 +73,15 @@ public class Main extends Application {
         // Initialize event handlers
         setupEventHandlers();
 
-        // Update UI state
+        // Initial UI state update
         updateUIState();
+    }
+
+    /**
+     * Handles application state changes and updates UI accordingly
+     */
+    private void onStateChanged(ApplicationState state) {
+        Platform.runLater(this::updateUIState);
     }
 
     private VBox createApiSection() {
@@ -242,42 +256,40 @@ public class Main extends Application {
         String apiKey = apiKeyField.getText().trim();
 
         if (apiKey.isEmpty()) {
-            updateConnectionStatus(false, "Please enter an API key");
+            appState.setConnectionState(ApplicationState.ConnectionState.ERROR, "Please enter an API key");
             return;
         }
 
         // Disable button and show loading state
         testConnectionButton.setDisable(true);
         testConnectionButton.setText(UIConstants.TESTING_TEXT);
-        updateConnectionStatus(false, UIConstants.TESTING_TEXT, UIConstants.WARNING_COLOR);
+        appState.setConnectionState(ApplicationState.ConnectionState.TESTING, UIConstants.TESTING_TEXT);
 
         // Validate API key asynchronously
         openAIService.validateApiKey(apiKey)
                 .thenAccept(result -> {
                     // Update UI on JavaFX Application Thread
                     Platform.runLater(() -> {
-                        isApiKeyValid = result.isValid();
-
                         if (result.isValid()) {
                             // Store the valid API key
                             openAIService.setApiKey(apiKey);
-                            updateConnectionStatus(true, result.getMessage());
+                            appState.setApiKeyValid(true);
                             showNotification("API Key validated successfully!", "SUCCESS");
                         } else {
-                            updateConnectionStatus(false, result.getMessage());
+                            appState.setConnectionState(ApplicationState.ConnectionState.ERROR, result.getMessage());
                             showNotification("API Key validation failed: " + result.getMessage(), "ERROR");
                         }
 
-                        // Re-enable button and update UI state
+                        // Re-enable button
                         testConnectionButton.setDisable(false);
                         testConnectionButton.setText(UIConstants.TEST_CONNECTION_TEXT);
-                        updateUIState();
                     });
                 })
                 .exceptionally(throwable -> {
                     // Handle any unexpected errors
                     Platform.runLater(() -> {
-                        updateConnectionStatus(false, "Validation failed: " + throwable.getMessage());
+                        appState.setConnectionState(ApplicationState.ConnectionState.ERROR,
+                                "Validation failed: " + throwable.getMessage());
                         showNotification("Connection test failed", "ERROR");
                         testConnectionButton.setDisable(false);
                         testConnectionButton.setText(UIConstants.TEST_CONNECTION_TEXT);
@@ -287,19 +299,26 @@ public class Main extends Application {
     }
 
     /**
-     * Updates the connection status label
+     * Updates the connection status label based on application state
      */
-    private void updateConnectionStatus(boolean isConnected, String message) {
-        updateConnectionStatus(isConnected, message, null);
-    }
+    private void updateConnectionStatus() {
+        String message = appState.getConnectionMessage();
+        String color;
 
-    /**
-     * Updates the connection status label with custom color
-     */
-    private void updateConnectionStatus(boolean isConnected, String message, String customColor) {
-        String color = customColor;
-        if (color == null) {
-            color = isConnected ? UIConstants.SUCCESS_COLOR : UIConstants.ERROR_COLOR;
+        switch (appState.getConnectionState()) {
+            case CONNECTED:
+                color = UIConstants.SUCCESS_COLOR;
+                break;
+            case TESTING:
+                color = UIConstants.WARNING_COLOR;
+                break;
+            case ERROR:
+                color = UIConstants.ERROR_COLOR;
+                break;
+            case DISCONNECTED:
+            default:
+                color = UIConstants.ERROR_COLOR;
+                break;
         }
 
         connectionStatus.setText(message);
@@ -318,29 +337,35 @@ public class Main extends Application {
      * Updates UI components based on current application state
      */
     private void updateUIState() {
+        // Update connection status
+        updateConnectionStatus();
+
         // Enable/disable recording button based on API key validity
-        recButton.setDisable(!isApiKeyValid);
+        recButton.setDisable(!appState.isApiKeyValid());
 
         // Update button style based on API key validity
-        if (isApiKeyValid) {
+        if (appState.isApiKeyValid()) {
             recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
         } else {
             recButton.setStyle(UIConstants.DISABLED_BUTTON_STYLE);
         }
 
         // Enable/disable send button based on API key validity
-        sendButton.setDisable(!isApiKeyValid);
-        if (isApiKeyValid) {
+        sendButton.setDisable(!appState.isApiKeyValid());
+        if (appState.isApiKeyValid()) {
             sendButton.setStyle(UIConstants.SEND_BUTTON_STYLE);
         } else {
             sendButton.setStyle(UIConstants.createButtonStyle(UIConstants.GRAY_COLOR));
         }
+
+        // Update recording UI based on recording state
+        updateRecordingUI();
     }
 
     private void toggleRecording() {
-        if (!isCurrentlyRecording) {
+        if (appState.isRecordingIdle()) {
             startRecording();
-        } else {
+        } else if (appState.isRecording()) {
             stopRecording();
         }
     }
@@ -353,8 +378,7 @@ public class Main extends Application {
         }
 
         // Update UI immediately
-        isCurrentlyRecording = true;
-        updateRecordingUI();
+        appState.setRecordingState(ApplicationState.RecordingState.RECORDING);
 
         // Start recording asynchronously
         audioRecordingService.startRecording()
@@ -393,15 +417,13 @@ public class Main extends Application {
                             showNotification("No audio data captured", "WARNING");
                         }
 
-                        isCurrentlyRecording = false;
-                        updateRecordingUI();
+                        appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                     });
                 })
                 .exceptionally(throwable -> {
                     Platform.runLater(() -> {
                         showNotification("Recording failed: " + throwable.getMessage(), "ERROR");
-                        isCurrentlyRecording = false;
-                        updateRecordingUI();
+                        appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                     });
                     return null;
                 });
@@ -410,8 +432,7 @@ public class Main extends Application {
     private void stopRecording() {
         if (audioRecordingService.isRecording()) {
             // Update UI to show processing state
-            recButton.setText(UIConstants.STOPPING_BUTTON_TEXT);
-            recButton.setDisable(true);
+            appState.setRecordingState(ApplicationState.RecordingState.STOPPING);
 
             audioRecordingService.stopRecording()
                     .thenAccept(audioData -> {
@@ -442,15 +463,13 @@ public class Main extends Application {
                                         });
                             }
 
-                            isCurrentlyRecording = false;
-                            updateRecordingUI();
+                            appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                         });
                     })
                     .exceptionally(throwable -> {
                         Platform.runLater(() -> {
                             showNotification("Failed to stop recording: " + throwable.getMessage(), "ERROR");
-                            isCurrentlyRecording = false;
-                            updateRecordingUI();
+                            appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                         });
                         return null;
                     });
@@ -458,15 +477,30 @@ public class Main extends Application {
     }
 
     private void updateRecordingUI() {
-        if (isCurrentlyRecording) {
-            recButton.setText(UIConstants.STOP_BUTTON_TEXT);
-            recButton.setStyle(UIConstants.DANGER_BUTTON_STYLE);
-            transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_RECORDING);
-        } else {
-            recButton.setText(UIConstants.REC_BUTTON_TEXT);
-            recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
-            transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_IDLE);
-            recButton.setDisable(false);
+        ApplicationState.RecordingState state = appState.getRecordingState();
+
+        switch (state) {
+            case RECORDING:
+                recButton.setText(UIConstants.STOP_BUTTON_TEXT);
+                recButton.setStyle(UIConstants.DANGER_BUTTON_STYLE);
+                recButton.setDisable(false);
+                transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_RECORDING);
+                break;
+
+            case STOPPING:
+                recButton.setText(UIConstants.STOPPING_BUTTON_TEXT);
+                recButton.setStyle(UIConstants.DANGER_BUTTON_STYLE);
+                recButton.setDisable(true);
+                transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_RECORDING);
+                break;
+
+            case IDLE:
+            default:
+                recButton.setText(UIConstants.REC_BUTTON_TEXT);
+                recButton.setStyle(appState.isApiKeyValid() ? UIConstants.PRIMARY_BUTTON_STYLE : UIConstants.DISABLED_BUTTON_STYLE);
+                recButton.setDisable(!appState.isApiKeyValid());
+                transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_IDLE);
+                break;
         }
     }
 
