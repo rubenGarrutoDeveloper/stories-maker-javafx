@@ -2,6 +2,7 @@ package com.voiceai;
 
 import com.voiceai.service.AudioRecordingService;
 import com.voiceai.service.OpenAIService;
+import com.voiceai.ui.UIConstants;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -16,8 +17,6 @@ public class Main extends Application {
     // Services
     private OpenAIService openAIService;
     private AudioRecordingService audioRecordingService;
-
-
 
     // UI Components
     private TextField apiKeyField;
@@ -44,12 +43,12 @@ public class Main extends Application {
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
 
-        primaryStage.setTitle("StorieS Maker");
+        primaryStage.setTitle(UIConstants.APP_TITLE);
 
         // Create main layout
-        VBox root = new VBox(15);
-        root.setPadding(new Insets(20));
-        root.setStyle("-fx-background-color: #f5f5f5;");
+        VBox root = new VBox(UIConstants.ROOT_SPACING);
+        root.setPadding(new Insets(UIConstants.ROOT_PADDING));
+        root.setStyle(UIConstants.ROOT_STYLE);
 
         // API Configuration Section
         VBox apiSection = createApiSection();
@@ -59,7 +58,7 @@ public class Main extends Application {
 
         root.getChildren().addAll(apiSection, mainContent);
 
-        Scene scene = new Scene(root, 1200, 700);
+        Scene scene = new Scene(root, UIConstants.MAIN_WINDOW_WIDTH, UIConstants.MAIN_WINDOW_HEIGHT);
         primaryStage.setScene(scene);
         primaryStage.setResizable(true);
         primaryStage.show();
@@ -72,24 +71,24 @@ public class Main extends Application {
     }
 
     private VBox createApiSection() {
-        VBox apiSection = new VBox(10);
+        VBox apiSection = new VBox(UIConstants.SECTION_SPACING);
 
-        Label titleLabel = new Label("StorieS Maker");
-        titleLabel.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #6b46c1;");
+        Label titleLabel = new Label(UIConstants.APP_TITLE);
+        titleLabel.setStyle(UIConstants.TITLE_STYLE);
 
-        HBox apiKeyBox = new HBox(10);
+        HBox apiKeyBox = new HBox(UIConstants.CONTROL_SPACING);
         apiKeyBox.setAlignment(Pos.CENTER_LEFT);
 
         apiKeyField = new TextField();
-        apiKeyField.setPromptText("OpenAI API Key");
-        apiKeyField.setPrefWidth(300);
-        apiKeyField.setStyle("-fx-padding: 8px; -fx-border-radius: 5px;");
+        apiKeyField.setPromptText(UIConstants.API_KEY_PROMPT);
+        apiKeyField.setPrefWidth(UIConstants.API_KEY_FIELD_WIDTH);
+        apiKeyField.setStyle(UIConstants.INPUT_FIELD_STYLE);
 
-        testConnectionButton = new Button("Test Connection");
-        testConnectionButton.setStyle("-fx-background-color: #e5e7eb; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        testConnectionButton = new Button(UIConstants.TEST_CONNECTION_TEXT);
+        testConnectionButton.setStyle(UIConstants.LIGHT_BUTTON_STYLE);
 
-        connectionStatus = new Label("Disconnected");
-        connectionStatus.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-padding: 5px 10px; -fx-border-radius: 15px;");
+        connectionStatus = new Label(UIConstants.DISCONNECTED_STATUS);
+        connectionStatus.setStyle(UIConstants.ERROR_STATUS_STYLE);
 
         apiKeyBox.getChildren().addAll(apiKeyField, testConnectionButton, connectionStatus);
         apiSection.getChildren().addAll(titleLabel, apiKeyBox);
@@ -98,16 +97,16 @@ public class Main extends Application {
     }
 
     private HBox createMainContent() {
-        HBox mainContent = new HBox(20);
+        HBox mainContent = new HBox(UIConstants.MAIN_CONTENT_SPACING);
         mainContent.setAlignment(Pos.TOP_CENTER);
 
         // Left Panel - Transcription
         VBox transcriptionPanel = createTranscriptionPanel();
-        transcriptionPanel.setPrefWidth(580);
+        transcriptionPanel.setPrefWidth(UIConstants.PANEL_WIDTH);
 
         // Right Panel - Chat GPT
         VBox chatPanel = createChatPanel();
-        chatPanel.setPrefWidth(580);
+        chatPanel.setPrefWidth(UIConstants.PANEL_WIDTH);
 
         mainContent.getChildren().addAll(transcriptionPanel, chatPanel);
 
@@ -115,98 +114,96 @@ public class Main extends Application {
     }
 
     private VBox createTranscriptionPanel() {
-        VBox panel = new VBox(15);
+        VBox panel = new VBox(UIConstants.PANEL_SPACING);
 
         // Header
-        HBox header = new HBox(10);
+        HBox header = new HBox(UIConstants.CONTROL_SPACING);
         header.setAlignment(Pos.CENTER_LEFT);
-        Label headerLabel = new Label("TRANSCRIPT");
-        headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        Label headerLabel = new Label(UIConstants.TRANSCRIPT_HEADER);
+        headerLabel.setStyle(UIConstants.HEADER_STYLE);
         header.getChildren().add(headerLabel);
 
         // Control buttons
-        HBox controls = new HBox(10);
+        HBox controls = new HBox(UIConstants.CONTROL_SPACING);
         controls.setAlignment(Pos.CENTER_LEFT);
 
-        recButton = new Button("🔴 REC");
-        recButton.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        recButton = new Button(UIConstants.REC_BUTTON_TEXT);
+        recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
 
-        saveButton = new Button("💾 SAVE");
-        saveButton.setStyle("-fx-background-color: #6366f1; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        saveButton = new Button(UIConstants.SAVE_BUTTON_TEXT);
+        saveButton.setStyle(UIConstants.createButtonStyle("#6366f1"));
 
-        selectAllButton = new Button("📋 SELECT ALL");
-        selectAllButton.setStyle("-fx-background-color: #8b5cf6; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        selectAllButton = new Button(UIConstants.SELECT_ALL_BUTTON_TEXT);
+        selectAllButton.setStyle(UIConstants.SECONDARY_BUTTON_STYLE);
 
-        loadButton = new Button("📂 LOAD");
-        loadButton.setStyle("-fx-background-color: #06b6d4; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        loadButton = new Button(UIConstants.LOAD_BUTTON_TEXT);
+        loadButton.setStyle(UIConstants.INFO_BUTTON_STYLE);
 
         controls.getChildren().addAll(recButton, saveButton, selectAllButton, loadButton);
 
         // Transcription area
         transcriptionArea = new TextArea();
-        transcriptionArea.setPromptText("Premi REC per iniziare la trascrizione...");
-        transcriptionArea.setPrefHeight(400);
+        transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_IDLE);
+        transcriptionArea.setPrefHeight(UIConstants.TRANSCRIPT_AREA_HEIGHT);
         transcriptionArea.setWrapText(true);
-        transcriptionArea.setStyle("-fx-control-inner-background: white; -fx-border-color: #d1d5db; -fx-border-radius: 5px;");
+        transcriptionArea.setStyle(UIConstants.TEXT_AREA_STYLE);
 
         panel.getChildren().addAll(header, controls, transcriptionArea);
-        panel.setStyle("-fx-background-color: white; -fx-border-radius: 10px; -fx-padding: 20px; " +
-                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);");
+        panel.setStyle(UIConstants.PANEL_STYLE);
 
         return panel;
     }
 
     private VBox createChatPanel() {
-        VBox panel = new VBox(15);
+        VBox panel = new VBox(UIConstants.PANEL_SPACING);
 
         // Header
-        HBox header = new HBox(10);
+        HBox header = new HBox(UIConstants.CONTROL_SPACING);
         header.setAlignment(Pos.CENTER_LEFT);
-        Label headerLabel = new Label("💬 CHAT GPT");
-        headerLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+        Label headerLabel = new Label(UIConstants.CHAT_HEADER);
+        headerLabel.setStyle(UIConstants.HEADER_STYLE);
         header.getChildren().add(headerLabel);
 
         // Chat area
         chatArea = new TextArea();
-        chatArea.setPromptText("Scrivi un messaggio per iniziare...");
-        chatArea.setPrefHeight(300);
+        chatArea.setPromptText(UIConstants.CHAT_PLACEHOLDER);
+        chatArea.setPrefHeight(UIConstants.CHAT_AREA_HEIGHT);
         chatArea.setWrapText(true);
         chatArea.setEditable(false);
-        chatArea.setStyle("-fx-control-inner-background: white; -fx-border-color: #d1d5db; -fx-border-radius: 5px;");
+        chatArea.setStyle(UIConstants.TEXT_AREA_STYLE);
 
         // Message input section
-        VBox inputSection = new VBox(10);
+        VBox inputSection = new VBox(UIConstants.CONTROL_SPACING);
 
-        HBox messageBox = new HBox(10);
+        HBox messageBox = new HBox(UIConstants.CONTROL_SPACING);
         messageBox.setAlignment(Pos.CENTER);
 
         messageField = new TextField();
-        messageField.setPromptText("Scrivi un messaggio...");
-        messageField.setPrefWidth(450);
-        messageField.setStyle("-fx-padding: 8px; -fx-border-radius: 5px;");
+        messageField.setPromptText(UIConstants.MESSAGE_PLACEHOLDER);
+        messageField.setPrefWidth(UIConstants.MESSAGE_FIELD_WIDTH);
+        messageField.setStyle(UIConstants.INPUT_FIELD_STYLE);
 
-        sendButton = new Button("➤");
-        sendButton.setStyle("-fx-background-color: #10b981; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 12px;");
+        sendButton = new Button(UIConstants.SEND_BUTTON_TEXT);
+        sendButton.setStyle(UIConstants.SEND_BUTTON_STYLE);
 
         messageBox.getChildren().addAll(messageField, sendButton);
 
         // Action buttons
-        HBox actionButtons = new HBox(10);
+        HBox actionButtons = new HBox(UIConstants.CONTROL_SPACING);
         actionButtons.setAlignment(Pos.CENTER);
 
-        insertTranscriptButton = new Button("📝 Insert Transcript");
-        insertTranscriptButton.setStyle("-fx-background-color: #8b5cf6; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        insertTranscriptButton = new Button(UIConstants.INSERT_TRANSCRIPT_BUTTON_TEXT);
+        insertTranscriptButton.setStyle(UIConstants.SECONDARY_BUTTON_STYLE);
 
-        clearButton = new Button("🗑️ Clear");
-        clearButton.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+        clearButton = new Button(UIConstants.CLEAR_BUTTON_TEXT);
+        clearButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
 
         actionButtons.getChildren().addAll(insertTranscriptButton, clearButton);
 
         inputSection.getChildren().addAll(messageBox, actionButtons);
 
         panel.getChildren().addAll(header, chatArea, inputSection);
-        panel.setStyle("-fx-background-color: white; -fx-border-radius: 10px; -fx-padding: 20px; " +
-                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);");
+        panel.setStyle(UIConstants.PANEL_STYLE);
 
         return panel;
     }
@@ -251,8 +248,8 @@ public class Main extends Application {
 
         // Disable button and show loading state
         testConnectionButton.setDisable(true);
-        testConnectionButton.setText("Testing...");
-        updateConnectionStatus(false, "Testing...", "#f59e0b"); // Orange color
+        testConnectionButton.setText(UIConstants.TESTING_TEXT);
+        updateConnectionStatus(false, UIConstants.TESTING_TEXT, UIConstants.WARNING_COLOR);
 
         // Validate API key asynchronously
         openAIService.validateApiKey(apiKey)
@@ -273,7 +270,7 @@ public class Main extends Application {
 
                         // Re-enable button and update UI state
                         testConnectionButton.setDisable(false);
-                        testConnectionButton.setText("Test Connection");
+                        testConnectionButton.setText(UIConstants.TEST_CONNECTION_TEXT);
                         updateUIState();
                     });
                 })
@@ -283,7 +280,7 @@ public class Main extends Application {
                         updateConnectionStatus(false, "Validation failed: " + throwable.getMessage());
                         showNotification("Connection test failed", "ERROR");
                         testConnectionButton.setDisable(false);
-                        testConnectionButton.setText("Test Connection");
+                        testConnectionButton.setText(UIConstants.TEST_CONNECTION_TEXT);
                     });
                     return null;
                 });
@@ -302,11 +299,11 @@ public class Main extends Application {
     private void updateConnectionStatus(boolean isConnected, String message, String customColor) {
         String color = customColor;
         if (color == null) {
-            color = isConnected ? "#10b981" : "#ef4444"; // Green for success, red for error
+            color = isConnected ? UIConstants.SUCCESS_COLOR : UIConstants.ERROR_COLOR;
         }
 
         connectionStatus.setText(message);
-        connectionStatus.setStyle("-fx-background-color: " + color + "; -fx-text-fill: white; -fx-padding: 5px 10px; -fx-border-radius: 15px;");
+        connectionStatus.setStyle(UIConstants.createStatusStyle(color));
     }
 
     /**
@@ -324,19 +321,19 @@ public class Main extends Application {
         // Enable/disable recording button based on API key validity
         recButton.setDisable(!isApiKeyValid);
 
-        // Update button text and style based on API key validity
+        // Update button style based on API key validity
         if (isApiKeyValid) {
-            recButton.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+            recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
         } else {
-            recButton.setStyle("-fx-background-color: #9ca3af; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
+            recButton.setStyle(UIConstants.DISABLED_BUTTON_STYLE);
         }
 
         // Enable/disable send button based on API key validity
         sendButton.setDisable(!isApiKeyValid);
         if (isApiKeyValid) {
-            sendButton.setStyle("-fx-background-color: #10b981; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 12px;");
+            sendButton.setStyle(UIConstants.SEND_BUTTON_STYLE);
         } else {
-            sendButton.setStyle("-fx-background-color: #9ca3af; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 12px;");
+            sendButton.setStyle(UIConstants.createButtonStyle(UIConstants.GRAY_COLOR));
         }
     }
 
@@ -348,7 +345,6 @@ public class Main extends Application {
         }
     }
 
-    // Add these new methods:
     private void startRecording() {
         // Check microphone availability
         if (!AudioRecordingService.isMicrophoneAvailable()) {
@@ -414,7 +410,7 @@ public class Main extends Application {
     private void stopRecording() {
         if (audioRecordingService.isRecording()) {
             // Update UI to show processing state
-            recButton.setText("⏹️ STOPPING...");
+            recButton.setText(UIConstants.STOPPING_BUTTON_TEXT);
             recButton.setDisable(true);
 
             audioRecordingService.stopRecording()
@@ -463,18 +459,16 @@ public class Main extends Application {
 
     private void updateRecordingUI() {
         if (isCurrentlyRecording) {
-            recButton.setText("⏹️ STOP");
-            recButton.setStyle("-fx-background-color: #dc2626; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
-            transcriptionArea.setPromptText("🎤 Recording in progress...");
+            recButton.setText(UIConstants.STOP_BUTTON_TEXT);
+            recButton.setStyle(UIConstants.DANGER_BUTTON_STYLE);
+            transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_RECORDING);
         } else {
-            recButton.setText("🔴 REC");
-            recButton.setStyle("-fx-background-color: #ef4444; -fx-text-fill: white; -fx-border-radius: 5px; -fx-padding: 8px 15px;");
-            transcriptionArea.setPromptText("Premi REC per iniziare la trascrizione...");
+            recButton.setText(UIConstants.REC_BUTTON_TEXT);
+            recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
+            transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_IDLE);
             recButton.setDisable(false);
         }
     }
-
-
 
     private void saveTranscription() {
         // TODO: Implement save functionality
