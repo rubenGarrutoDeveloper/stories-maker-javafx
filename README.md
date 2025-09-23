@@ -30,7 +30,7 @@ The application features a dual-panel interface:
 
 ### 1. Clone the Repository
 ```bash
-git clone <repository-url>
+git clone https://github.com/rubenGarrutoDeveloper/stories-maker-javafx.git
 cd stories-maker
 ```
 
