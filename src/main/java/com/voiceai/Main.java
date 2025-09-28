@@ -6,6 +6,7 @@ import com.voiceai.service.FileOperationsService;
 import com.voiceai.service.NotificationService;
 import com.voiceai.service.OpenAIService;
 import com.voiceai.service.RealTimeTranscriptionService;
+import com.voiceai.service.SettingsService;
 import com.voiceai.state.ApplicationState;
 import com.voiceai.ui.UIConstants;
 import javafx.application.Application;
@@ -28,6 +29,7 @@ public class Main extends Application {
     private RealTimeTranscriptionService realTimeTranscriptionService;
     private NotificationService notificationService;
     private FileOperationsService fileOperationsService;
+    private SettingsService settingsService;
 
     // Application State
     private ApplicationState appState;
@@ -67,16 +69,23 @@ public class Main extends Application {
         // Initialize services and state
         notificationService = new NotificationService();
         fileOperationsService = new FileOperationsService(notificationService);
+        settingsService = new SettingsService(notificationService);
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
         realTimeTranscriptionService = new RealTimeTranscriptionService(audioRecordingService, openAIService);
         appState = new ApplicationState();
         currentConversation = new Conversation("StorieS Maker Chat");
 
+        // Load settings and apply to UI
+        loadApplicationSettings();
+
         // Set up state change listener
         appState.addStateChangeListener(this::onStateChanged);
 
         primaryStage.setTitle(UIConstants.APP_TITLE);
+
+        // Apply window geometry from settings
+        applyWindowGeometry(primaryStage);
 
         // Create main layout
         VBox root = new VBox(UIConstants.ROOT_SPACING);
@@ -91,7 +100,7 @@ public class Main extends Application {
 
         root.getChildren().addAll(apiSection, mainContent);
 
-        Scene scene = new Scene(root, UIConstants.MAIN_WINDOW_WIDTH, UIConstants.MAIN_WINDOW_HEIGHT);
+        Scene scene = new Scene(root, settingsService.getWindowWidth(), settingsService.getWindowHeight());
         primaryStage.setScene(scene);
         primaryStage.setResizable(true);
         primaryStage.show();
@@ -105,10 +114,56 @@ public class Main extends Application {
         // Show startup notification
         notificationService.showInfo("StorieS Maker initialized successfully");
 
-        // Shutdown hook for cleanup
+        // Save window geometry on close
         primaryStage.setOnCloseRequest(event -> {
+            saveWindowGeometry();
             shutdown();
         });
+    }
+
+    /**
+     * Loads application settings and applies them to the UI
+     */
+    private void loadApplicationSettings() {
+        // Load API key if available
+        String apiKey = settingsService.getApiKey();
+        if (apiKey != null && !apiKey.trim().isEmpty()) {
+            openAIService.setApiKey(apiKey);
+            appState.setApiKeyValid(true);
+            appState.setConnectionState(ApplicationState.ConnectionState.CONNECTED, "API key loaded from settings");
+        }
+
+        // Load real-time transcription preference
+        useRealTimeTranscription = settingsService.isRealTimeTranscriptionEnabled();
+
+        notificationService.showInfo("Settings loaded from: " + settingsService.getConfigurationFileLocation());
+    }
+
+    /**
+     * Applies window geometry from settings
+     */
+    private void applyWindowGeometry(Stage stage) {
+        double x = settingsService.getWindowX();
+        double y = settingsService.getWindowY();
+
+        if (x >= 0 && y >= 0) {
+            stage.setX(x);
+            stage.setY(y);
+        }
+    }
+
+    /**
+     * Saves current window geometry to settings
+     */
+    private void saveWindowGeometry() {
+        if (primaryStage != null) {
+            settingsService.saveWindowGeometry(
+                    primaryStage.getX(),
+                    primaryStage.getY(),
+                    primaryStage.getWidth(),
+                    primaryStage.getHeight()
+            );
+        }
     }
 
     /**
@@ -131,6 +186,14 @@ public class Main extends Application {
         apiKeyField.setPromptText(UIConstants.API_KEY_PROMPT);
         apiKeyField.setPrefWidth(UIConstants.API_KEY_FIELD_WIDTH);
         apiKeyField.setStyle(UIConstants.INPUT_FIELD_STYLE);
+
+        // Pre-populate API key field if available (masked for security)
+        String existingApiKey = settingsService.getApiKey();
+        if (existingApiKey != null && !existingApiKey.trim().isEmpty()) {
+            // Show masked version for security
+            apiKeyField.setText("•".repeat(Math.min(existingApiKey.length(), 32)));
+            apiKeyField.setPromptText("API key loaded from settings");
+        }
 
         testConnectionButton = new Button(UIConstants.TEST_CONNECTION_TEXT);
         testConnectionButton.setStyle(UIConstants.LIGHT_BUTTON_STYLE);
@@ -177,14 +240,14 @@ public class Main extends Application {
         transcriptionStatusLabel = new Label("");
         transcriptionStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
-        // Real-time transcription checkbox
+        // Real-time transcription checkbox - load from settings
         realTimeCheckBox = new CheckBox("Real-time");
         realTimeCheckBox.setSelected(useRealTimeTranscription);
         realTimeCheckBox.setStyle("-fx-font-size: 12px;");
         realTimeCheckBox.setOnAction(e -> {
             useRealTimeTranscription = realTimeCheckBox.isSelected();
-            notificationService.showInfo("Real-time transcription " +
-                    (useRealTimeTranscription ? "enabled" : "disabled"));
+            // Save preference to settings
+            settingsService.setRealTimeTranscriptionEnabled(useRealTimeTranscription);
         });
 
         header.getChildren().addAll(headerLabel, transcriptionStatusLabel, realTimeCheckBox);
@@ -279,19 +342,19 @@ public class Main extends Application {
     }
 
     private void setupEventHandlers() {
-        // Test Connection button
+        // Test Connection button - now integrates with SettingsService
         testConnectionButton.setOnAction(e -> testApiConnection());
 
         // Recording button
         recButton.setOnAction(e -> toggleRecording());
 
-        // Save button - now uses FileOperationsService
+        // Save button
         saveButton.setOnAction(e -> saveTranscription());
 
-        // Select All button - now uses FileOperationsService
+        // Select All button
         selectAllButton.setOnAction(e -> selectAllTranscription());
 
-        // Load button - now uses FileOperationsService
+        // Load button
         loadButton.setOnAction(e -> loadTranscription());
 
         // Send message button
@@ -307,9 +370,18 @@ public class Main extends Application {
         messageField.setOnAction(e -> sendMessage());
     }
 
-    // Event handler methods
+    // Event handler methods - now using SettingsService
     private void testApiConnection() {
-        String apiKey = apiKeyField.getText().trim();
+        String inputApiKey = apiKeyField.getText().trim();
+
+        // Handle masked API key field
+        final String apiKey;
+        if (inputApiKey.contains("•") && settingsService.hasApiKey()) {
+            // User hasn't changed the field, use existing API key
+            apiKey = settingsService.getApiKey();
+        } else {
+            apiKey = inputApiKey;
+        }
 
         if (apiKey.isEmpty()) {
             appState.setConnectionState(ApplicationState.ConnectionState.ERROR, "Please enter an API key");
@@ -327,10 +399,17 @@ public class Main extends Application {
                     // Update UI on JavaFX Application Thread
                     Platform.runLater(() -> {
                         if (result.isValid()) {
-                            // Store the valid API key
+                            // Store the valid API key in both OpenAI service and settings
                             openAIService.setApiKey(apiKey);
+                            settingsService.setApiKey(apiKey);
                             appState.setApiKeyValid(true);
-                            notificationService.showSuccess("API Key validated successfully!");
+                            appState.setConnectionState(ApplicationState.ConnectionState.CONNECTED, "Connected");
+
+                            // Update UI to show masked key
+                            apiKeyField.setText("•".repeat(Math.min(apiKey.length(), 32)));
+                            apiKeyField.setPromptText("API key saved");
+
+                            notificationService.showSuccess("API Key validated and saved!");
                         } else {
                             appState.setConnectionState(ApplicationState.ConnectionState.ERROR, result.getMessage());
                             notificationService.showError("API Key validation failed", new RuntimeException(result.getMessage()));
@@ -695,8 +774,6 @@ public class Main extends Application {
 
         if (result.isSuccess()) {
             // The loaded content is stored in the message field of the result
-            // This is a temporary solution - in a more complex implementation,
-            // we might have a separate content field
             String loadedContent = result.getMessage();
             transcriptionArea.setText(loadedContent);
         }
