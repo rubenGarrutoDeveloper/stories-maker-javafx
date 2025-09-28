@@ -31,14 +31,14 @@ public class UIConstants {
 
     // Button Text
     public static final String REC_BUTTON_TEXT = "🔴 REC";
-    public static final String STOP_BUTTON_TEXT = "⏹️ STOP";
-    public static final String STOPPING_BUTTON_TEXT = "⏹️ STOPPING...";
+    public static final String STOP_BUTTON_TEXT = "⏹ STOP";
+    public static final String STOPPING_BUTTON_TEXT = "⏹ STOPPING...";
     public static final String SAVE_BUTTON_TEXT = "💾 SAVE";
     public static final String SELECT_ALL_BUTTON_TEXT = "📋 SELECT ALL";
     public static final String LOAD_BUTTON_TEXT = "📂 LOAD";
     public static final String SEND_BUTTON_TEXT = "➤";
     public static final String INSERT_TRANSCRIPT_BUTTON_TEXT = "📎 Insert Transcript";
-    public static final String CLEAR_BUTTON_TEXT = "🗑️ Clear";
+    public static final String CLEAR_BUTTON_TEXT = "\uD83D\uDDD1 Clear";
 
     // Placeholder Text
     public static final String TRANSCRIPT_PLACEHOLDER_IDLE = "Premi REC per iniziare la trascrizione...";

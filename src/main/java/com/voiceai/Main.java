@@ -8,6 +8,7 @@ import com.voiceai.service.NotificationService;
 import com.voiceai.service.OpenAIService;
 import com.voiceai.service.RealTimeTranscriptionService;
 import com.voiceai.service.SettingsService;
+import com.voiceai.service.TranscriptionService;
 import com.voiceai.state.ApplicationState;
 import com.voiceai.ui.UIConstants;
 import javafx.application.Application;
@@ -32,6 +33,7 @@ public class Main extends Application {
     private FileOperationsService fileOperationsService;
     private SettingsService settingsService;
     private AudioService audioService;
+    private TranscriptionService transcriptionService;
 
     // Application State
     private ApplicationState appState;
@@ -86,13 +88,18 @@ public class Main extends Application {
                 appState
         );
 
+        // Initialize TranscriptionService
+        transcriptionService = new TranscriptionService(
+                audioService,
+                settingsService,
+                appState,
+                notificationService
+        );
+
         currentConversation = new Conversation("StorieS Maker Chat");
 
         // Load settings and apply to UI
         loadApplicationSettings();
-
-        // Set up audio service callbacks
-        setupAudioServiceCallbacks();
 
         // Set up state change listener
         appState.addStateChangeListener(this::onStateChanged);
@@ -123,6 +130,9 @@ public class Main extends Application {
         // Initialize event handlers
         setupEventHandlers();
 
+        // Initialize transcription service with UI components
+        initializeTranscriptionService();
+
         // Initial UI state update
         updateUIState();
 
@@ -137,36 +147,11 @@ public class Main extends Application {
     }
 
     /**
-     * Sets up callbacks for AudioService to communicate with UI
+     * Initializes the TranscriptionService with UI components
      */
-    private void setupAudioServiceCallbacks() {
-        audioService.setCallbacks(
-                // Status callback
-                this::updateTranscriptionStatus,
-
-                // Transcription callback
-                new AudioService.TranscriptionCallback() {
-                    @Override
-                    public void onTranscriptionReceived(String text) {
-                        Platform.runLater(() -> {
-                            transcriptionArea.appendText(text);
-                            // Auto-scroll to bottom
-                            transcriptionArea.setScrollTop(Double.MAX_VALUE);
-                        });
-                    }
-
-                    @Override
-                    public void onTranscriptionError(String error) {
-                        Platform.runLater(() -> {
-                            System.err.println("Real-time transcription error: " + error);
-                            updateTranscriptionStatus("Error: " + error);
-                        });
-                    }
-                },
-
-                // Recording state callback
-                state -> Platform.runLater(this::updateRecordingUI)
-        );
+    private void initializeTranscriptionService() {
+        transcriptionService.initializeUI(recButton, transcriptionStatusLabel, transcriptionArea);
+        transcriptionService.updateApiKeyState(appState.isApiKeyValid());
     }
 
     /**
@@ -218,7 +203,11 @@ public class Main extends Application {
      * Handles application state changes and updates UI accordingly
      */
     private void onStateChanged(ApplicationState state) {
-        Platform.runLater(this::updateUIState);
+        Platform.runLater(() -> {
+            updateUIState();
+            // Notify transcription service of API key state changes
+            transcriptionService.updateApiKeyState(state.isApiKeyValid());
+        });
     }
 
     private VBox createApiSection() {
@@ -294,8 +283,8 @@ public class Main extends Application {
         realTimeCheckBox.setStyle("-fx-font-size: 12px;");
         realTimeCheckBox.setOnAction(e -> {
             useRealTimeTranscription = realTimeCheckBox.isSelected();
-            // Save preference to settings
-            settingsService.setRealTimeTranscriptionEnabled(useRealTimeTranscription);
+            // Save preference to settings through TranscriptionService
+            transcriptionService.setRealTimeTranscriptionEnabled(useRealTimeTranscription);
         });
 
         header.getChildren().addAll(headerLabel, transcriptionStatusLabel, realTimeCheckBox);
@@ -306,6 +295,7 @@ public class Main extends Application {
 
         recButton = new Button(UIConstants.REC_BUTTON_TEXT);
         recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
+        // Note: Recording button event handler will be set by TranscriptionService
 
         saveButton = new Button(UIConstants.SAVE_BUTTON_TEXT);
         saveButton.setStyle(UIConstants.createButtonStyle("#6366f1"));
@@ -393,22 +383,21 @@ public class Main extends Application {
         // Test Connection button
         testConnectionButton.setOnAction(e -> testApiConnection());
 
-        // Recording button - now uses AudioService
-        recButton.setOnAction(e -> toggleRecording());
+        // Recording button is now handled by TranscriptionService
 
-        // Save button
+        // Save button - uses TranscriptionService for text retrieval
         saveButton.setOnAction(e -> saveTranscription());
 
-        // Select All button
+        // Select All button - now uses TranscriptionService
         selectAllButton.setOnAction(e -> selectAllTranscription());
 
-        // Load button
+        // Load button - uses TranscriptionService for text setting
         loadButton.setOnAction(e -> loadTranscription());
 
         // Send message button
         sendButton.setOnAction(e -> sendMessage());
 
-        // Insert transcript button
+        // Insert transcript button - uses TranscriptionService
         insertTranscriptButton.setOnAction(e -> insertTranscript());
 
         // Clear chat button
@@ -575,16 +564,6 @@ public class Main extends Application {
         // Update token counter
         updateTokenCounter();
 
-        // Enable/disable recording button based on API key validity
-        recButton.setDisable(!appState.isApiKeyValid());
-
-        // Update button style based on API key validity
-        if (appState.isApiKeyValid()) {
-            recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
-        } else {
-            recButton.setStyle(UIConstants.DISABLED_BUTTON_STYLE);
-        }
-
         // Enable/disable send button based on API key validity and chat state
         boolean canSendMessage = appState.isApiKeyValid() && !appState.isChatBusy();
         sendButton.setDisable(!canSendMessage);
@@ -596,79 +575,12 @@ public class Main extends Application {
             sendButton.setStyle(UIConstants.createButtonStyle(UIConstants.GRAY_COLOR));
         }
 
-        // Update recording UI based on recording state
-        updateRecordingUI();
+        // Recording UI updates are now handled by TranscriptionService
     }
 
-    // Audio operations now delegated to AudioService
-    private void toggleRecording() {
-        // Create recording configuration
-        AudioService.RecordingConfig config = new AudioService.RecordingConfig(
-                useRealTimeTranscription,
-                settingsService.getLanguage(),
-                3.0 // chunk duration seconds
-        );
-
-        // Toggle recording through AudioService
-        audioService.toggleRecording(config)
-                .thenAccept(result -> {
-                    Platform.runLater(() -> {
-                        if (!result.isSuccess() && result.getException() != null) {
-                            // Additional error handling if needed
-                            // (AudioService already handles notifications)
-                        }
-                    });
-                })
-                .exceptionally(throwable -> {
-                    Platform.runLater(() -> {
-                        notificationService.showError("Recording operation failed", throwable);
-                    });
-                    return null;
-                });
-    }
-
-    /**
-     * Updates the transcription status label
-     */
-    private void updateTranscriptionStatus(String status) {
-        if (status == null || status.isEmpty()) {
-            transcriptionStatusLabel.setText("");
-        } else {
-            transcriptionStatusLabel.setText("• " + status);
-        }
-    }
-
-    private void updateRecordingUI() {
-        ApplicationState.RecordingState state = appState.getRecordingState();
-
-        switch (state) {
-            case RECORDING:
-                recButton.setText(UIConstants.STOP_BUTTON_TEXT);
-                recButton.setStyle(UIConstants.DANGER_BUTTON_STYLE);
-                recButton.setDisable(false);
-                transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_RECORDING);
-                break;
-
-            case STOPPING:
-                recButton.setText(UIConstants.STOPPING_BUTTON_TEXT);
-                recButton.setStyle(UIConstants.DANGER_BUTTON_STYLE);
-                recButton.setDisable(true);
-                transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_RECORDING);
-                break;
-
-            case IDLE:
-            default:
-                recButton.setText(UIConstants.REC_BUTTON_TEXT);
-                recButton.setStyle(appState.isApiKeyValid() ? UIConstants.PRIMARY_BUTTON_STYLE : UIConstants.DISABLED_BUTTON_STYLE);
-                recButton.setDisable(!appState.isApiKeyValid());
-                transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_IDLE);
-                break;
-        }
-    }
-
-    // File operations delegated to FileOperationsService
+    // File operations delegated to FileOperationsService and TranscriptionService
     private void saveTranscription() {
-        String transcription = transcriptionArea.getText().trim();
+        String transcription = transcriptionService.getTranscriptionText().trim();
         FileOperationsService.FileOperationResult result =
                 fileOperationsService.saveTranscription(transcription, primaryStage);
 
@@ -676,7 +588,7 @@ public class Main extends Application {
     }
 
     private void selectAllTranscription() {
-        fileOperationsService.selectAllText(transcriptionArea);
+        transcriptionService.selectAllText();
     }
 
     private void loadTranscription() {
@@ -685,7 +597,7 @@ public class Main extends Application {
 
         if (result.isSuccess()) {
             String loadedContent = result.getMessage();
-            transcriptionArea.setText(loadedContent);
+            transcriptionService.setTranscriptionText(loadedContent);
         }
     }
 
@@ -780,7 +692,7 @@ public class Main extends Application {
     }
 
     private void insertTranscript() {
-        String transcript = transcriptionArea.getText().trim();
+        String transcript = transcriptionService.getTranscriptionText().trim();
         if (!transcript.isEmpty()) {
             // If there's already text in the message field, add a space
             String currentText = messageField.getText();
@@ -819,6 +731,11 @@ public class Main extends Application {
         // Stop audio service
         if (audioService != null) {
             audioService.shutdown();
+        }
+
+        // Stop transcription service
+        if (transcriptionService != null) {
+            transcriptionService.shutdown();
         }
 
         notificationService.showInfo("Application shutdown complete");
