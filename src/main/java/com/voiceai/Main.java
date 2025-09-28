@@ -2,6 +2,7 @@ package com.voiceai;
 
 import com.voiceai.model.Conversation;
 import com.voiceai.service.AudioRecordingService;
+import com.voiceai.service.NotificationService;
 import com.voiceai.service.OpenAIService;
 import com.voiceai.service.RealTimeTranscriptionService;
 import com.voiceai.state.ApplicationState;
@@ -29,6 +30,7 @@ public class Main extends Application {
     private OpenAIService openAIService;
     private AudioRecordingService audioRecordingService;
     private RealTimeTranscriptionService realTimeTranscriptionService;
+    private NotificationService notificationService;
 
     // Application State
     private ApplicationState appState;
@@ -61,6 +63,7 @@ public class Main extends Application {
     @Override
     public void start(Stage primaryStage) {
         // Initialize services and state
+        notificationService = new NotificationService();
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
         realTimeTranscriptionService = new RealTimeTranscriptionService(audioRecordingService, openAIService);
@@ -95,6 +98,9 @@ public class Main extends Application {
 
         // Initial UI state update
         updateUIState();
+
+        // Show startup notification
+        notificationService.showInfo("StorieS Maker initialized successfully");
 
         // Shutdown hook for cleanup
         primaryStage.setOnCloseRequest(event -> {
@@ -174,8 +180,8 @@ public class Main extends Application {
         realTimeCheckBox.setStyle("-fx-font-size: 12px;");
         realTimeCheckBox.setOnAction(e -> {
             useRealTimeTranscription = realTimeCheckBox.isSelected();
-            showNotification("Real-time transcription " +
-                    (useRealTimeTranscription ? "enabled" : "disabled"), "INFO");
+            notificationService.showInfo("Real-time transcription " +
+                    (useRealTimeTranscription ? "enabled" : "disabled"));
         });
 
         header.getChildren().addAll(headerLabel, transcriptionStatusLabel, realTimeCheckBox);
@@ -321,10 +327,10 @@ public class Main extends Application {
                             // Store the valid API key
                             openAIService.setApiKey(apiKey);
                             appState.setApiKeyValid(true);
-                            showNotification("API Key validated successfully!", "SUCCESS");
+                            notificationService.showSuccess("API Key validated successfully!");
                         } else {
                             appState.setConnectionState(ApplicationState.ConnectionState.ERROR, result.getMessage());
-                            showNotification("API Key validation failed: " + result.getMessage(), "ERROR");
+                            notificationService.showError("API Key validation failed", new RuntimeException(result.getMessage()));
                         }
 
                         // Re-enable button
@@ -337,7 +343,7 @@ public class Main extends Application {
                     Platform.runLater(() -> {
                         appState.setConnectionState(ApplicationState.ConnectionState.ERROR,
                                 "Validation failed: " + throwable.getMessage());
-                        showNotification("Connection test failed", "ERROR");
+                        notificationService.showError("Connection test failed", throwable);
                         testConnectionButton.setDisable(false);
                         testConnectionButton.setText(UIConstants.TEST_CONNECTION_TEXT);
                     });
@@ -427,14 +433,6 @@ public class Main extends Application {
     }
 
     /**
-     * Shows a temporary notification (simple console output for now)
-     */
-    private void showNotification(String message, String type) {
-        System.out.println("[" + type + "] " + message);
-        // TODO: Implement proper notification system (toast, alert, etc.)
-    }
-
-    /**
      * Updates UI components based on current application state
      */
     private void updateUIState() {
@@ -483,7 +481,7 @@ public class Main extends Application {
     private void startRecording() {
         // Check microphone availability
         if (!AudioRecordingService.isMicrophoneAvailable()) {
-            showNotification("Microphone not available", "ERROR");
+            notificationService.showError("Microphone not available");
             return;
         }
 
@@ -526,7 +524,7 @@ public class Main extends Application {
                 })
                 .exceptionally(throwable -> {
                     Platform.runLater(() -> {
-                        showNotification("Recording failed: " + throwable.getMessage(), "ERROR");
+                        notificationService.showError("Recording failed", throwable);
                         updateTranscriptionStatus("Recording failed");
                         appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                     });
@@ -552,7 +550,7 @@ public class Main extends Application {
                             if (useRealTimeTranscription) {
                                 // Real-time already processed everything
                                 int chunks = realTimeTranscriptionService.getChunksProcessed();
-                                showNotification("Recording stopped. Processed " + chunks + " chunks", "SUCCESS");
+                                notificationService.showSuccess("Recording stopped. Processed " + chunks + " chunks");
                                 updateTranscriptionStatus("Completed (" + chunks + " chunks)");
                             } else {
                                 // Process the entire recording now
@@ -564,7 +562,7 @@ public class Main extends Application {
                     })
                     .exceptionally(throwable -> {
                         Platform.runLater(() -> {
-                            showNotification("Failed to stop recording: " + throwable.getMessage(), "ERROR");
+                            notificationService.showError("Failed to stop recording", throwable);
                             updateTranscriptionStatus("Stop failed");
                             appState.setRecordingState(ApplicationState.RecordingState.IDLE);
                         });
@@ -614,7 +612,7 @@ public class Main extends Application {
      */
     private void processAudioData(byte[] audioData) {
         if (audioData.length > 0) {
-            showNotification("Processing " + audioData.length + " bytes of audio", "INFO");
+            notificationService.showInfo("Processing " + audioData.length + " bytes of audio");
             updateTranscriptionStatus("Transcribing...");
 
             // Transcribe audio using Whisper API
@@ -623,11 +621,11 @@ public class Main extends Application {
                         Platform.runLater(() -> {
                             if (result.isSuccess()) {
                                 transcriptionArea.appendText(result.getText() + "\n\n");
-                                showNotification("Transcription completed!", "SUCCESS");
+                                notificationService.showSuccess("Transcription completed!");
                                 updateTranscriptionStatus("Transcription complete");
                             } else {
                                 transcriptionArea.appendText("[Transcription failed: " + result.getMessage() + "]\n\n");
-                                showNotification("Transcription failed: " + result.getMessage(), "ERROR");
+                                notificationService.showError("Transcription failed", new RuntimeException(result.getMessage()));
                                 updateTranscriptionStatus("Transcription failed");
                             }
                         });
@@ -635,13 +633,13 @@ public class Main extends Application {
                     .exceptionally(throwable -> {
                         Platform.runLater(() -> {
                             transcriptionArea.appendText("[Transcription error: " + throwable.getMessage() + "]\n\n");
-                            showNotification("Transcription error", "ERROR");
+                            notificationService.showError("Transcription error", throwable);
                             updateTranscriptionStatus("Error");
                         });
                         return null;
                     });
         } else {
-            showNotification("No audio data captured", "WARNING");
+            notificationService.showWarning("No audio data captured");
             updateTranscriptionStatus("");
         }
     }
@@ -677,7 +675,7 @@ public class Main extends Application {
     private void saveTranscription() {
         String transcription = transcriptionArea.getText().trim();
         if (transcription.isEmpty()) {
-            showNotification("No transcription to save", "WARNING");
+            notificationService.showWarning("No transcription to save");
             return;
         }
 
@@ -696,9 +694,9 @@ public class Main extends Application {
         if (file != null) {
             try (FileWriter writer = new FileWriter(file)) {
                 writer.write(transcription);
-                showNotification("Transcription saved successfully!", "SUCCESS");
+                notificationService.showSuccess("Transcription saved successfully!");
             } catch (IOException e) {
-                showNotification("Failed to save transcription: " + e.getMessage(), "ERROR");
+                notificationService.showError("Failed to save transcription", e);
             }
         }
     }
@@ -722,9 +720,9 @@ public class Main extends Application {
             try {
                 String content = Files.readString(file.toPath());
                 transcriptionArea.setText(content);
-                showNotification("Transcription loaded successfully!", "SUCCESS");
+                notificationService.showSuccess("Transcription loaded successfully!");
             } catch (IOException e) {
-                showNotification("Failed to load transcription: " + e.getMessage(), "ERROR");
+                notificationService.showError("Failed to load transcription", e);
             }
         }
     }
@@ -753,7 +751,7 @@ public class Main extends Application {
         ).exceptionally(throwable -> {
             Platform.runLater(() -> {
                 appState.setChatState(ApplicationState.ChatState.ERROR, throwable.getMessage());
-                showNotification("Failed to send message: " + throwable.getMessage(), "ERROR");
+                notificationService.showError("Failed to send message", throwable);
             });
             return null;
         });
@@ -797,12 +795,12 @@ public class Main extends Application {
                 // Reset state to idle
                 appState.setChatState(ApplicationState.ChatState.IDLE, "");
 
-                showNotification("Response received (" + result.getTokensUsed() + " tokens)", "SUCCESS");
+                notificationService.showSuccess("Response received (" + result.getTokensUsed() + " tokens)");
             } else {
                 // Handle error
                 appState.setChatState(ApplicationState.ChatState.ERROR, result.getMessage());
                 chatArea.appendText("\n[Error: " + result.getMessage() + "]\n\n");
-                showNotification("Chat error: " + result.getMessage(), "ERROR");
+                notificationService.showError("Chat error", new RuntimeException(result.getMessage()));
             }
 
             // Auto-scroll to bottom
@@ -847,7 +845,7 @@ public class Main extends Application {
                 currentConversation.clearConversation();
                 appState.resetTokenCounter();
                 appState.setChatState(ApplicationState.ChatState.IDLE, "");
-                showNotification("Chat cleared", "SUCCESS");
+                notificationService.showSuccess("Chat cleared");
             }
         });
     }
@@ -866,6 +864,7 @@ public class Main extends Application {
             realTimeTranscriptionService.shutdown();
         }
 
+        notificationService.showInfo("Application shutdown complete");
         System.out.println("Application shutdown complete");
     }
 
