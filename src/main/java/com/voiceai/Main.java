@@ -2,6 +2,7 @@ package com.voiceai;
 
 import com.voiceai.model.Conversation;
 import com.voiceai.service.AudioRecordingService;
+import com.voiceai.service.FileOperationsService;
 import com.voiceai.service.NotificationService;
 import com.voiceai.service.OpenAIService;
 import com.voiceai.service.RealTimeTranscriptionService;
@@ -14,13 +15,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -31,6 +27,7 @@ public class Main extends Application {
     private AudioRecordingService audioRecordingService;
     private RealTimeTranscriptionService realTimeTranscriptionService;
     private NotificationService notificationService;
+    private FileOperationsService fileOperationsService;
 
     // Application State
     private ApplicationState appState;
@@ -60,10 +57,16 @@ public class Main extends Application {
     private CheckBox realTimeCheckBox;
     private boolean useRealTimeTranscription = true;
 
+    // Reference to primary stage for file dialogs
+    private Stage primaryStage;
+
     @Override
     public void start(Stage primaryStage) {
+        this.primaryStage = primaryStage;
+
         // Initialize services and state
         notificationService = new NotificationService();
+        fileOperationsService = new FileOperationsService(notificationService);
         openAIService = new OpenAIService();
         audioRecordingService = new AudioRecordingService();
         realTimeTranscriptionService = new RealTimeTranscriptionService(audioRecordingService, openAIService);
@@ -282,13 +285,13 @@ public class Main extends Application {
         // Recording button
         recButton.setOnAction(e -> toggleRecording());
 
-        // Save button
+        // Save button - now uses FileOperationsService
         saveButton.setOnAction(e -> saveTranscription());
 
-        // Select All button
+        // Select All button - now uses FileOperationsService
         selectAllButton.setOnAction(e -> selectAllTranscription());
 
-        // Load button
+        // Load button - now uses FileOperationsService
         loadButton.setOnAction(e -> loadTranscription());
 
         // Send message button
@@ -672,59 +675,32 @@ public class Main extends Application {
         }
     }
 
+    // File operations now delegated to FileOperationsService
     private void saveTranscription() {
         String transcription = transcriptionArea.getText().trim();
-        if (transcription.isEmpty()) {
-            notificationService.showWarning("No transcription to save");
-            return;
-        }
+        FileOperationsService.FileOperationResult result =
+                fileOperationsService.saveTranscription(transcription, primaryStage);
 
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Save Transcription");
-        fileChooser.setInitialFileName("transcription_" +
-                LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss")) + ".txt");
-
-        // Set extension filters
-        fileChooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("Text Files", "*.txt"),
-                new FileChooser.ExtensionFilter("All Files", "*.*")
-        );
-
-        File file = fileChooser.showSaveDialog(null);
-        if (file != null) {
-            try (FileWriter writer = new FileWriter(file)) {
-                writer.write(transcription);
-                notificationService.showSuccess("Transcription saved successfully!");
-            } catch (IOException e) {
-                notificationService.showError("Failed to save transcription", e);
-            }
-        }
+        // Result handling is done by the service through notifications
+        // Additional logic could be added here if needed
     }
 
     private void selectAllTranscription() {
-        transcriptionArea.selectAll();
+        fileOperationsService.selectAllText(transcriptionArea);
     }
 
     private void loadTranscription() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.setTitle("Load Transcription");
+        FileOperationsService.FileOperationResult result =
+                fileOperationsService.loadTranscription(primaryStage);
 
-        // Set extension filters
-        fileChooser.getExtensionFilters().addAll(
-                new FileChooser.ExtensionFilter("Text Files", "*.txt"),
-                new FileChooser.ExtensionFilter("All Files", "*.*")
-        );
-
-        File file = fileChooser.showOpenDialog(null);
-        if (file != null) {
-            try {
-                String content = Files.readString(file.toPath());
-                transcriptionArea.setText(content);
-                notificationService.showSuccess("Transcription loaded successfully!");
-            } catch (IOException e) {
-                notificationService.showError("Failed to load transcription", e);
-            }
+        if (result.isSuccess()) {
+            // The loaded content is stored in the message field of the result
+            // This is a temporary solution - in a more complex implementation,
+            // we might have a separate content field
+            String loadedContent = result.getMessage();
+            transcriptionArea.setText(loadedContent);
         }
+        // Error handling is done by the service through notifications
     }
 
     private void sendMessage() {
