@@ -1,8 +1,8 @@
 package com.voiceai;
 
-import com.voiceai.model.Conversation;
 import com.voiceai.service.AudioRecordingService;
 import com.voiceai.service.AudioService;
+import com.voiceai.service.ChatService;
 import com.voiceai.service.FileOperationsService;
 import com.voiceai.service.NotificationService;
 import com.voiceai.service.OpenAIService;
@@ -20,9 +20,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-
 public class Main extends Application {
 
     // Services
@@ -34,12 +31,10 @@ public class Main extends Application {
     private SettingsService settingsService;
     private AudioService audioService;
     private TranscriptionService transcriptionService;
+    private ChatService chatService;
 
     // Application State
     private ApplicationState appState;
-
-    // Conversation Management
-    private Conversation currentConversation;
 
     // UI Components
     private TextField apiKeyField;
@@ -79,7 +74,7 @@ public class Main extends Application {
         realTimeTranscriptionService = new RealTimeTranscriptionService(audioRecordingService, openAIService);
         appState = new ApplicationState();
 
-        // Initialize AudioService with all dependencies
+        // Initialize AudioService
         audioService = new AudioService(
                 audioRecordingService,
                 realTimeTranscriptionService,
@@ -96,7 +91,12 @@ public class Main extends Application {
                 notificationService
         );
 
-        currentConversation = new Conversation("StorieS Maker Chat");
+        // Initialize ChatService
+        chatService = new ChatService(
+                openAIService,
+                notificationService,
+                appState
+        );
 
         // Load settings and apply to UI
         loadApplicationSettings();
@@ -130,8 +130,8 @@ public class Main extends Application {
         // Initialize event handlers
         setupEventHandlers();
 
-        // Initialize transcription service with UI components
-        initializeTranscriptionService();
+        // Initialize services with UI components
+        initializeServices();
 
         // Initial UI state update
         updateUIState();
@@ -147,11 +147,14 @@ public class Main extends Application {
     }
 
     /**
-     * Initializes the TranscriptionService with UI components
+     * Initializes services with UI components
      */
-    private void initializeTranscriptionService() {
+    private void initializeServices() {
         transcriptionService.initializeUI(recButton, transcriptionStatusLabel, transcriptionArea);
         transcriptionService.updateApiKeyState(appState.isApiKeyValid());
+
+        chatService.initializeUI(chatArea, messageField, sendButton, chatStatusLabel);
+        chatService.updateApiKeyState(appState.isApiKeyValid());
     }
 
     /**
@@ -205,8 +208,9 @@ public class Main extends Application {
     private void onStateChanged(ApplicationState state) {
         Platform.runLater(() -> {
             updateUIState();
-            // Notify transcription service of API key state changes
+            // Notify services of API key state changes
             transcriptionService.updateApiKeyState(state.isApiKeyValid());
+            chatService.updateApiKeyState(state.isApiKeyValid());
         });
     }
 
@@ -277,13 +281,12 @@ public class Main extends Application {
         transcriptionStatusLabel = new Label("");
         transcriptionStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
-        // Real-time transcription checkbox - load from settings
+        // Real-time transcription checkbox
         realTimeCheckBox = new CheckBox("Real-time");
         realTimeCheckBox.setSelected(useRealTimeTranscription);
         realTimeCheckBox.setStyle("-fx-font-size: 12px;");
         realTimeCheckBox.setOnAction(e -> {
             useRealTimeTranscription = realTimeCheckBox.isSelected();
-            // Save preference to settings through TranscriptionService
             transcriptionService.setRealTimeTranscriptionEnabled(useRealTimeTranscription);
         });
 
@@ -295,7 +298,6 @@ public class Main extends Application {
 
         recButton = new Button(UIConstants.REC_BUTTON_TEXT);
         recButton.setStyle(UIConstants.PRIMARY_BUTTON_STYLE);
-        // Note: Recording button event handler will be set by TranscriptionService
 
         saveButton = new Button(UIConstants.SAVE_BUTTON_TEXT);
         saveButton.setStyle(UIConstants.createButtonStyle("#6366f1"));
@@ -383,31 +385,25 @@ public class Main extends Application {
         // Test Connection button
         testConnectionButton.setOnAction(e -> testApiConnection());
 
-        // Recording button is now handled by TranscriptionService
+        // Recording button is handled by TranscriptionService
+        // Send message button is handled by ChatService
 
-        // Save button - uses TranscriptionService for text retrieval
+        // Save button
         saveButton.setOnAction(e -> saveTranscription());
 
-        // Select All button - now uses TranscriptionService
+        // Select All button
         selectAllButton.setOnAction(e -> selectAllTranscription());
 
-        // Load button - uses TranscriptionService for text setting
+        // Load button
         loadButton.setOnAction(e -> loadTranscription());
 
-        // Send message button
-        sendButton.setOnAction(e -> sendMessage());
-
-        // Insert transcript button - uses TranscriptionService
+        // Insert transcript button - uses both services
         insertTranscriptButton.setOnAction(e -> insertTranscript());
 
-        // Clear chat button
-        clearButton.setOnAction(e -> clearChat());
-
-        // Enter key for message field
-        messageField.setOnAction(e -> sendMessage());
+        // Clear chat button - delegates to ChatService
+        clearButton.setOnAction(e -> chatService.clearChat());
     }
 
-    // Event handler methods
     private void testApiConnection() {
         String inputApiKey = apiKeyField.getText().trim();
 
@@ -498,40 +494,6 @@ public class Main extends Application {
     }
 
     /**
-     * Updates the chat status label based on application state
-     */
-    private void updateChatStatus() {
-        String message = "";
-        String color = "#666";
-
-        switch (appState.getChatState()) {
-            case SENDING:
-                message = "Sending message...";
-                color = UIConstants.WARNING_COLOR;
-                break;
-            case RECEIVING:
-                message = "Waiting for response...";
-                color = UIConstants.WARNING_COLOR;
-                break;
-            case STREAMING:
-                message = "Receiving response...";
-                color = UIConstants.SUCCESS_COLOR;
-                break;
-            case ERROR:
-                message = "Error: " + appState.getChatStatusMessage();
-                color = UIConstants.ERROR_COLOR;
-                break;
-            case IDLE:
-            default:
-                message = appState.getChatStatusMessage();
-                break;
-        }
-
-        chatStatusLabel.setText(message);
-        chatStatusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + color + ";");
-    }
-
-    /**
      * Updates the token counter
      */
     private void updateTokenCounter() {
@@ -558,33 +520,16 @@ public class Main extends Application {
         // Update connection status
         updateConnectionStatus();
 
-        // Update chat status
-        updateChatStatus();
-
         // Update token counter
         updateTokenCounter();
 
-        // Enable/disable send button based on API key validity and chat state
-        boolean canSendMessage = appState.isApiKeyValid() && !appState.isChatBusy();
-        sendButton.setDisable(!canSendMessage);
-        messageField.setDisable(appState.isChatBusy());
-
-        if (canSendMessage) {
-            sendButton.setStyle(UIConstants.SEND_BUTTON_STYLE);
-        } else {
-            sendButton.setStyle(UIConstants.createButtonStyle(UIConstants.GRAY_COLOR));
-        }
-
-        // Recording UI updates are now handled by TranscriptionService
+        // Chat and transcription UI updates are now handled by their respective services
     }
 
-    // File operations delegated to FileOperationsService and TranscriptionService
+    // File operations delegated to services
     private void saveTranscription() {
         String transcription = transcriptionService.getTranscriptionText().trim();
-        FileOperationsService.FileOperationResult result =
-                fileOperationsService.saveTranscription(transcription, primaryStage);
-
-        // Result handling is done by the service through notifications
+        fileOperationsService.saveTranscription(transcription, primaryStage);
     }
 
     private void selectAllTranscription() {
@@ -601,127 +546,9 @@ public class Main extends Application {
         }
     }
 
-    private void sendMessage() {
-        String message = messageField.getText().trim();
-        if (message.isEmpty() || !appState.isApiKeyValid() || appState.isChatBusy()) {
-            return;
-        }
-
-        // Clear the input field immediately
-        messageField.clear();
-
-        // Add user message to conversation and display
-        currentConversation.addUserMessage(message);
-        appendChatMessage("You", message);
-
-        // Update state to sending
-        appState.setChatState(ApplicationState.ChatState.SENDING, "Sending message...");
-
-        // Send to OpenAI with streaming
-        openAIService.sendStreamingChatCompletion(
-                currentConversation,
-                this::onStreamingChunk,
-                this::onStreamingComplete
-        ).exceptionally(throwable -> {
-            Platform.runLater(() -> {
-                appState.setChatState(ApplicationState.ChatState.ERROR, throwable.getMessage());
-                notificationService.showError("Failed to send message", throwable);
-            });
-            return null;
-        });
-    }
-
-    /**
-     * Handles streaming response chunks
-     */
-    private void onStreamingChunk(String chunk) {
-        Platform.runLater(() -> {
-            // Update state to streaming if not already
-            if (!appState.isChatStreaming()) {
-                appState.setChatState(ApplicationState.ChatState.STREAMING, "Receiving response...");
-                // Start the assistant message
-                chatArea.appendText("ChatGPT: ");
-            }
-
-            // Append the chunk to chat area
-            chatArea.appendText(chunk);
-
-            // Auto-scroll to bottom
-            chatArea.setScrollTop(Double.MAX_VALUE);
-        });
-    }
-
-    /**
-     * Handles completion of streaming response
-     */
-    private void onStreamingComplete(OpenAIService.ChatCompletionResult result) {
-        Platform.runLater(() -> {
-            if (result.isSuccess()) {
-                // Add assistant message to conversation
-                currentConversation.addAssistantMessage(result.getContent());
-
-                // Add newlines for formatting
-                chatArea.appendText("\n\n");
-
-                // Update token usage
-                appState.addTokensUsed(result.getTokensUsed());
-
-                // Reset state to idle
-                appState.setChatState(ApplicationState.ChatState.IDLE, "");
-
-                notificationService.showSuccess("Response received (" + result.getTokensUsed() + " tokens)");
-            } else {
-                // Handle error
-                appState.setChatState(ApplicationState.ChatState.ERROR, result.getMessage());
-                chatArea.appendText("\n[Error: " + result.getMessage() + "]\n\n");
-                notificationService.showError("Chat error", new RuntimeException(result.getMessage()));
-            }
-
-            // Auto-scroll to bottom
-            chatArea.setScrollTop(Double.MAX_VALUE);
-        });
-    }
-
-    /**
-     * Appends a message to the chat area with proper formatting
-     */
-    private void appendChatMessage(String sender, String message) {
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
-        chatArea.appendText(sender + " (" + timestamp + "): " + message + "\n\n");
-        chatArea.setScrollTop(Double.MAX_VALUE);
-    }
-
     private void insertTranscript() {
         String transcript = transcriptionService.getTranscriptionText().trim();
-        if (!transcript.isEmpty()) {
-            // If there's already text in the message field, add a space
-            String currentText = messageField.getText();
-            if (!currentText.isEmpty()) {
-                messageField.setText(currentText + " " + transcript);
-            } else {
-                messageField.setText(transcript);
-            }
-            messageField.requestFocus();
-            messageField.positionCaret(messageField.getText().length());
-        }
-    }
-
-    private void clearChat() {
-        // Show confirmation dialog
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Clear Chat");
-        alert.setHeaderText("Clear conversation history?");
-        alert.setContentText("This will clear all messages in the current conversation. This action cannot be undone.");
-
-        alert.showAndWait().ifPresent(response -> {
-            if (response == ButtonType.OK) {
-                chatArea.clear();
-                currentConversation.clearConversation();
-                appState.resetTokenCounter();
-                appState.setChatState(ApplicationState.ChatState.IDLE, "");
-                notificationService.showSuccess("Chat cleared");
-            }
-        });
+        chatService.insertTextToMessageField(transcript);
     }
 
     /**
@@ -736,6 +563,11 @@ public class Main extends Application {
         // Stop transcription service
         if (transcriptionService != null) {
             transcriptionService.shutdown();
+        }
+
+        // Stop chat service
+        if (chatService != null) {
+            chatService.shutdown();
         }
 
         notificationService.showInfo("Application shutdown complete");
