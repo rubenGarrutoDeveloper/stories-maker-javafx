@@ -1,9 +1,5 @@
-package com.voiceai.ui;
+package com.voiceai;
 
-/**
- * Constants for UI styling, colors, sizes, and text
- * Centralizes all UI-related constants for better maintainability
- */
 public class UIConstants {
 
     // Colors
@@ -28,6 +24,8 @@ public class UIConstants {
     public static final String DISCONNECTED_STATUS = "Disconnected";
     public static final String TRANSCRIPT_HEADER = "TRANSCRIPT";
     public static final String CHAT_HEADER = "💬 CHAT GPT";
+    public static final String AUDIO_SOURCE_LABEL = "Audio Source:";
+    public static final String REFRESH_SOURCES_TEXT = "🔄";
 
     // Button Text
     public static final String REC_BUTTON_TEXT = "🔴 REC";
@@ -45,6 +43,7 @@ public class UIConstants {
     public static final String TRANSCRIPT_PLACEHOLDER_RECORDING = "🎤 Recording in progress...";
     public static final String CHAT_PLACEHOLDER = "Scrivi un messaggio per iniziare...";
     public static final String MESSAGE_PLACEHOLDER = "Scrivi un messaggio...";
+    public static final String AUDIO_SOURCE_PROMPT = "Select audio input...";
 
     // Dimensions
     public static final int MAIN_WINDOW_WIDTH = 1200;
@@ -54,6 +53,7 @@ public class UIConstants {
     public static final int CHAT_AREA_HEIGHT = 300;
     public static final int API_KEY_FIELD_WIDTH = 300;
     public static final int MESSAGE_FIELD_WIDTH = 450;
+    public static final int AUDIO_SOURCE_COMBO_WIDTH = 250;
 
     // Spacing
     public static final int ROOT_SPACING = 15;
@@ -67,6 +67,7 @@ public class UIConstants {
     // Font Sizes
     public static final String TITLE_FONT_SIZE = "24px";
     public static final String HEADER_FONT_SIZE = "16px";
+    public static final String LABEL_FONT_SIZE = "12px";
 
     // CSS Styles
     public static final String TITLE_STYLE =
@@ -77,6 +78,10 @@ public class UIConstants {
     public static final String HEADER_STYLE =
             "-fx-font-size: " + HEADER_FONT_SIZE + "; " +
                     "-fx-font-weight: bold;";
+
+    public static final String LABEL_STYLE =
+            "-fx-font-size: " + LABEL_FONT_SIZE + "; " +
+                    "-fx-text-fill: #666;";
 
     public static final String ROOT_STYLE =
             "-fx-background-color: " + BACKGROUND_COLOR + ";";
@@ -91,6 +96,10 @@ public class UIConstants {
             "-fx-padding: 8px; " +
                     "-fx-border-radius: 5px;";
 
+    public static final String COMBO_BOX_STYLE =
+            "-fx-padding: 6px; " +
+                    "-fx-border-radius: 5px;";
+
     public static final String TEXT_AREA_STYLE =
             "-fx-control-inner-background: " + WHITE_COLOR + "; " +
                     "-fx-border-color: " + BORDER_COLOR + "; " +
@@ -100,6 +109,11 @@ public class UIConstants {
     public static final String BASE_BUTTON_STYLE =
             "-fx-border-radius: 5px; " +
                     "-fx-padding: 8px 15px;";
+
+    public static final String SMALL_BUTTON_STYLE =
+            "-fx-border-radius: 5px; " +
+                    "-fx-padding: 6px 10px; " +
+                    "-fx-font-size: 14px;";
 
     public static final String PRIMARY_BUTTON_STYLE =
             "-fx-background-color: " + ERROR_COLOR + "; " +
@@ -141,6 +155,11 @@ public class UIConstants {
                     "-fx-text-fill: " + WHITE_COLOR + "; " +
                     "-fx-border-radius: 5px; " +
                     "-fx-padding: 8px 12px;";
+
+    public static final String REFRESH_BUTTON_STYLE =
+            "-fx-background-color: " + INFO_COLOR + "; " +
+                    "-fx-text-fill: " + WHITE_COLOR + "; " +
+                    SMALL_BUTTON_STYLE;
 
     // Status Styles
     public static final String SUCCESS_STATUS_STYLE =

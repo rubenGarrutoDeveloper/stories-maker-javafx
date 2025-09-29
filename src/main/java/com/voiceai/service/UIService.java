@@ -1,6 +1,6 @@
 package com.voiceai.service;
 
-import com.voiceai.ui.UIConstants;
+import com.voiceai.UIConstants;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -8,10 +8,6 @@ import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
-/**
- * Service for managing UI creation and layout.
- * Handles all UI component creation, styling, and organization.
- */
 public class UIService {
 
     // UI Component references
@@ -32,28 +28,17 @@ public class UIService {
     private Label tokenCounterLabel;
     private Label transcriptionStatusLabel;
     private CheckBox realTimeCheckBox;
+    private ComboBox<AudioRecordingService.AudioSource> audioSourceComboBox;
+    private Button refreshSourcesButton;
 
-    /**
-     * Creates and shows the main UI
-     *
-     * @param stage the primary stage
-     * @param windowWidth the window width
-     * @param windowHeight the window height
-     * @param existingApiKey the existing API key (masked)
-     * @param useRealTimeTranscription whether real-time transcription is enabled
-     * @return the created scene
-     */
     public Scene createAndShowUI(Stage stage, double windowWidth, double windowHeight,
                                  String existingApiKey, boolean useRealTimeTranscription) {
-        // Create main layout
         VBox root = new VBox(UIConstants.ROOT_SPACING);
         root.setPadding(new Insets(UIConstants.ROOT_PADDING));
         root.setStyle(UIConstants.ROOT_STYLE);
 
-        // API Configuration Section
         VBox apiSection = createApiSection(existingApiKey);
 
-        // Main Content - Two panels
         HBox mainContent = createMainContent(useRealTimeTranscription);
 
         root.getChildren().addAll(apiSection, mainContent);
@@ -62,9 +47,6 @@ public class UIService {
         return scene;
     }
 
-    /**
-     * Creates the API configuration section
-     */
     private VBox createApiSection(String existingApiKey) {
         VBox apiSection = new VBox(UIConstants.SECTION_SPACING);
 
@@ -79,7 +61,6 @@ public class UIService {
         apiKeyField.setPrefWidth(UIConstants.API_KEY_FIELD_WIDTH);
         apiKeyField.setStyle(UIConstants.INPUT_FIELD_STYLE);
 
-        // Pre-populate API key field if available (masked for security)
         if (existingApiKey != null && !existingApiKey.trim().isEmpty()) {
             apiKeyField.setText("•".repeat(Math.min(existingApiKey.length(), 32)));
             apiKeyField.setPromptText("API key loaded from settings");
@@ -91,28 +72,47 @@ public class UIService {
         connectionStatus = new Label(UIConstants.DISCONNECTED_STATUS);
         connectionStatus.setStyle(UIConstants.ERROR_STATUS_STYLE);
 
-        // Token counter label
         tokenCounterLabel = new Label("Tokens: 0");
         tokenCounterLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #666;");
 
         apiKeyBox.getChildren().addAll(apiKeyField, testConnectionButton, connectionStatus, tokenCounterLabel);
-        apiSection.getChildren().addAll(titleLabel, apiKeyBox);
+
+        // Audio source selection row
+        HBox audioSourceBox = createAudioSourceSelector();
+
+        apiSection.getChildren().addAll(titleLabel, apiKeyBox, audioSourceBox);
 
         return apiSection;
     }
 
-    /**
-     * Creates the main content area with both panels
-     */
+    private HBox createAudioSourceSelector() {
+        HBox audioSourceBox = new HBox(UIConstants.CONTROL_SPACING);
+        audioSourceBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label audioSourceLabel = new Label(UIConstants.AUDIO_SOURCE_LABEL);
+        audioSourceLabel.setStyle(UIConstants.LABEL_STYLE);
+
+        audioSourceComboBox = new ComboBox<>();
+        audioSourceComboBox.setPromptText(UIConstants.AUDIO_SOURCE_PROMPT);
+        audioSourceComboBox.setPrefWidth(UIConstants.AUDIO_SOURCE_COMBO_WIDTH);
+        audioSourceComboBox.setStyle(UIConstants.COMBO_BOX_STYLE);
+
+        refreshSourcesButton = new Button(UIConstants.REFRESH_SOURCES_TEXT);
+        refreshSourcesButton.setStyle(UIConstants.REFRESH_BUTTON_STYLE);
+        refreshSourcesButton.setTooltip(new Tooltip("Refresh audio sources"));
+
+        audioSourceBox.getChildren().addAll(audioSourceLabel, audioSourceComboBox, refreshSourcesButton);
+
+        return audioSourceBox;
+    }
+
     private HBox createMainContent(boolean useRealTimeTranscription) {
         HBox mainContent = new HBox(UIConstants.MAIN_CONTENT_SPACING);
         mainContent.setAlignment(Pos.TOP_CENTER);
 
-        // Left Panel - Transcription
         VBox transcriptionPanel = createTranscriptionPanel(useRealTimeTranscription);
         transcriptionPanel.setPrefWidth(UIConstants.PANEL_WIDTH);
 
-        // Right Panel - Chat GPT
         VBox chatPanel = createChatPanel();
         chatPanel.setPrefWidth(UIConstants.PANEL_WIDTH);
 
@@ -121,13 +121,9 @@ public class UIService {
         return mainContent;
     }
 
-    /**
-     * Creates the transcription panel
-     */
     private VBox createTranscriptionPanel(boolean useRealTimeTranscription) {
         VBox panel = new VBox(UIConstants.PANEL_SPACING);
 
-        // Header with status
         HBox header = new HBox(UIConstants.CONTROL_SPACING);
         header.setAlignment(Pos.CENTER_LEFT);
         Label headerLabel = new Label(UIConstants.TRANSCRIPT_HEADER);
@@ -136,14 +132,12 @@ public class UIService {
         transcriptionStatusLabel = new Label("");
         transcriptionStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
 
-        // Real-time transcription checkbox
         realTimeCheckBox = new CheckBox("Real-time");
         realTimeCheckBox.setSelected(useRealTimeTranscription);
         realTimeCheckBox.setStyle("-fx-font-size: 12px;");
 
         header.getChildren().addAll(headerLabel, transcriptionStatusLabel, realTimeCheckBox);
 
-        // Control buttons
         HBox controls = new HBox(UIConstants.CONTROL_SPACING);
         controls.setAlignment(Pos.CENTER_LEFT);
 
@@ -161,7 +155,6 @@ public class UIService {
 
         controls.getChildren().addAll(recButton, saveButton, selectAllButton, loadButton);
 
-        // Transcription area
         transcriptionArea = new TextArea();
         transcriptionArea.setPromptText(UIConstants.TRANSCRIPT_PLACEHOLDER_IDLE);
         transcriptionArea.setPrefHeight(UIConstants.TRANSCRIPT_AREA_HEIGHT);
@@ -174,13 +167,9 @@ public class UIService {
         return panel;
     }
 
-    /**
-     * Creates the chat panel
-     */
     private VBox createChatPanel() {
         VBox panel = new VBox(UIConstants.PANEL_SPACING);
 
-        // Header with status
         HBox header = new HBox(UIConstants.CONTROL_SPACING);
         header.setAlignment(Pos.CENTER_LEFT);
         Label headerLabel = new Label(UIConstants.CHAT_HEADER);
@@ -191,7 +180,6 @@ public class UIService {
 
         header.getChildren().addAll(headerLabel, chatStatusLabel);
 
-        // Chat area
         chatArea = new TextArea();
         chatArea.setPromptText(UIConstants.CHAT_PLACEHOLDER);
         chatArea.setPrefHeight(UIConstants.CHAT_AREA_HEIGHT);
@@ -199,7 +187,6 @@ public class UIService {
         chatArea.setEditable(false);
         chatArea.setStyle(UIConstants.TEXT_AREA_STYLE);
 
-        // Message input section
         VBox inputSection = new VBox(UIConstants.CONTROL_SPACING);
 
         HBox messageBox = new HBox(UIConstants.CONTROL_SPACING);
@@ -215,7 +202,6 @@ public class UIService {
 
         messageBox.getChildren().addAll(messageField, sendButton);
 
-        // Action buttons
         HBox actionButtons = new HBox(UIConstants.CONTROL_SPACING);
         actionButtons.setAlignment(Pos.CENTER);
 
@@ -253,4 +239,6 @@ public class UIService {
     public Label getTokenCounterLabel() { return tokenCounterLabel; }
     public Label getTranscriptionStatusLabel() { return transcriptionStatusLabel; }
     public CheckBox getRealTimeCheckBox() { return realTimeCheckBox; }
+    public ComboBox<AudioRecordingService.AudioSource> getAudioSourceComboBox() { return audioSourceComboBox; }
+    public Button getRefreshSourcesButton() { return refreshSourcesButton; }
 }

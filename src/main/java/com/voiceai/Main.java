@@ -2,11 +2,12 @@ package com.voiceai;
 
 import com.voiceai.service.*;
 import com.voiceai.state.ApplicationState;
-import com.voiceai.ui.UIConstants;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
+
+import java.util.List;
 
 public class Main extends Application {
 
@@ -64,6 +65,9 @@ public class Main extends Application {
         // Set up event handlers
         setupEventHandlers();
 
+        // Initialize audio source selector
+        initializeAudioSourceSelector();
+
         // Show startup notification
         notificationService.showInfo("StorieS Maker initialized successfully");
 
@@ -74,9 +78,6 @@ public class Main extends Application {
         });
     }
 
-    /**
-     * Initializes all application services
-     */
     private void initializeServices() {
         notificationService = new NotificationService();
         fileOperationsService = new FileOperationsService(notificationService);
@@ -91,9 +92,6 @@ public class Main extends Application {
         uiService = new UIService();
     }
 
-    /**
-     * Initializes services with UI components
-     */
     private void initializeServiceUI() {
         transcriptionService.initializeUI(
                 uiService.getRecButton(),
@@ -113,9 +111,6 @@ public class Main extends Application {
         chatService.updateApiKeyState(appState.isApiKeyValid());
     }
 
-    /**
-     * Loads and applies application settings
-     */
     private void loadApplicationSettings() {
         String apiKey = settingsService.getApiKey();
         if (apiKey != null && !apiKey.trim().isEmpty()) {
@@ -129,9 +124,6 @@ public class Main extends Application {
                 settingsService.getConfigurationFileLocation());
     }
 
-    /**
-     * Applies window geometry from settings
-     */
     private void applyWindowGeometry(Stage stage) {
         double x = settingsService.getWindowX();
         double y = settingsService.getWindowY();
@@ -142,9 +134,6 @@ public class Main extends Application {
         }
     }
 
-    /**
-     * Saves current window geometry
-     */
     private void saveWindowGeometry() {
         if (primaryStage != null) {
             settingsService.saveWindowGeometry(
@@ -154,9 +143,6 @@ public class Main extends Application {
         }
     }
 
-    /**
-     * Sets up all event handlers
-     */
     private void setupEventHandlers() {
         uiService.getTestConnectionButton().setOnAction(e -> testApiConnection());
         uiService.getSaveButton().setOnAction(e -> saveTranscription());
@@ -165,11 +151,155 @@ public class Main extends Application {
         uiService.getInsertTranscriptButton().setOnAction(e -> insertTranscript());
         uiService.getClearButton().setOnAction(e -> chatService.clearChat());
         uiService.getRealTimeCheckBox().setOnAction(e -> transcriptionService.setRealTimeTranscriptionEnabled(uiService.getRealTimeCheckBox().isSelected()));
+
+        // Audio source selection handlers
+        uiService.getAudioSourceComboBox().setOnAction(e -> onAudioSourceSelected());
+        uiService.getRefreshSourcesButton().setOnAction(e -> refreshAudioSources());
     }
 
     /**
-     * Handles application state changes
+     * Initializes the audio source selector with available sources
      */
+    private void initializeAudioSourceSelector() {
+        List<AudioRecordingService.AudioSource> sources = audioRecordingService.getAvailableAudioSources();
+
+        if (sources.isEmpty()) {
+            notificationService.showWarning("No audio input sources found on this system");
+            uiService.getAudioSourceComboBox().setDisable(true);
+            return;
+        }
+
+        // Populate combo box
+        uiService.getAudioSourceComboBox().getItems().clear();
+        uiService.getAudioSourceComboBox().getItems().addAll(sources);
+
+        // Try to restore saved audio source
+        String savedSourceName = settingsService.getAudioSourceName();
+        AudioRecordingService.AudioSource selectedSource = null;
+
+        if (savedSourceName != null) {
+            // Find the saved source
+            for (AudioRecordingService.AudioSource source : sources) {
+                if (source.getDisplayName().equals(savedSourceName)) {
+                    selectedSource = source;
+                    break;
+                }
+            }
+        }
+
+        // If no saved source or saved source not found, use the first one
+        if (selectedSource == null && !sources.isEmpty()) {
+            selectedSource = sources.get(0);
+        }
+
+        // Set the selected source
+        if (selectedSource != null) {
+            uiService.getAudioSourceComboBox().setValue(selectedSource);
+            audioRecordingService.setAudioSource(selectedSource);
+
+            notificationService.showInfo("Audio source: " + selectedSource.getDisplayName());
+        }
+
+        // Show info about system audio availability
+        boolean hasSystemAudio = sources.stream().anyMatch(AudioRecordingService.AudioSource::isSystemAudio);
+
+        // Count microphones and system audio sources
+        long micCount = sources.stream().filter(s -> !s.isSystemAudio()).count();
+        long sysAudioCount = sources.stream().filter(AudioRecordingService.AudioSource::isSystemAudio).count();
+
+        notificationService.showSuccess("Found " + sources.size() + " audio source(s): " +
+                micCount + " microphone(s), " + sysAudioCount + " system audio");
+
+        if (!hasSystemAudio) {
+            notificationService.showWarning("⚠️ System audio (PC audio) not detected!");
+            notificationService.showInfo("To record PC audio: Open 'Sound Settings' → 'Sound Control Panel' → " +
+                    "'Recording' tab → Right-click → 'Show Disabled Devices' → " +
+                    "Enable 'Stereo Mix' or 'Wave Out Mix'");
+        } else {
+            notificationService.showSuccess("✓ System audio capture is available! You can record PC audio.");
+        }
+    }
+
+    /**
+     * Handles audio source selection change
+     */
+    private void onAudioSourceSelected() {
+        AudioRecordingService.AudioSource selected = uiService.getAudioSourceComboBox().getValue();
+
+        if (selected != null) {
+            try {
+                audioRecordingService.setAudioSource(selected);
+                settingsService.setAudioSourceName(selected.getDisplayName());
+
+                String sourceType = selected.isSystemAudio() ? "System Audio" : "Microphone";
+                notificationService.showSuccess("Audio source changed to: " + selected.getDisplayName() + " (" + sourceType + ")");
+
+                // Test the audio source
+                if (audioRecordingService.testAudioSource(selected)) {
+                    notificationService.showInfo("Audio source is working correctly");
+                } else {
+                    notificationService.showWarning("Warning: Selected audio source may not be working properly");
+                }
+
+            } catch (Exception e) {
+                notificationService.showError("Failed to set audio source", e);
+            }
+        }
+    }
+
+    /**
+     * Refreshes the list of available audio sources
+     */
+    private void refreshAudioSources() {
+        notificationService.showInfo("Refreshing audio sources...");
+
+        // Get current selection to try to restore it
+        AudioRecordingService.AudioSource currentSelection = uiService.getAudioSourceComboBox().getValue();
+
+        // Reload sources
+        List<AudioRecordingService.AudioSource> sources = audioRecordingService.getAvailableAudioSources();
+
+        if (sources.isEmpty()) {
+            notificationService.showWarning("No audio input sources found");
+            uiService.getAudioSourceComboBox().setDisable(true);
+            return;
+        }
+
+        // Update combo box
+        uiService.getAudioSourceComboBox().getItems().clear();
+        uiService.getAudioSourceComboBox().getItems().addAll(sources);
+        uiService.getAudioSourceComboBox().setDisable(false);
+
+        // Try to restore previous selection
+        if (currentSelection != null) {
+            AudioRecordingService.AudioSource match = sources.stream()
+                    .filter(s -> s.getDisplayName().equals(currentSelection.getDisplayName()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (match != null) {
+                uiService.getAudioSourceComboBox().setValue(match);
+                audioRecordingService.setAudioSource(match);
+            } else {
+                // Previous source not available, select first one
+                uiService.getAudioSourceComboBox().setValue(sources.get(0));
+                audioRecordingService.setAudioSource(sources.get(0));
+                notificationService.showWarning("Previous audio source no longer available");
+            }
+        } else if (!sources.isEmpty()) {
+            uiService.getAudioSourceComboBox().setValue(sources.get(0));
+            audioRecordingService.setAudioSource(sources.get(0));
+        }
+
+        notificationService.showSuccess("Found " + sources.size() + " audio source(s)");
+
+        // Report if system audio is available
+        boolean hasSystemAudio = sources.stream().anyMatch(AudioRecordingService.AudioSource::isSystemAudio);
+        if (hasSystemAudio) {
+            notificationService.showInfo("System audio capture is available");
+        }
+    }
+
     private void onStateChanged(ApplicationState state) {
         Platform.runLater(() -> {
             updateConnectionStatus();
@@ -179,9 +309,6 @@ public class Main extends Application {
         });
     }
 
-    /**
-     * Tests API connection
-     */
     private void testApiConnection() {
         String inputApiKey = uiService.getApiKeyField().getText().trim();
 

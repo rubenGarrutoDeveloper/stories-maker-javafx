@@ -1,7 +1,7 @@
 package com.voiceai.service;
 
 import com.voiceai.state.ApplicationState;
-import com.voiceai.ui.UIConstants;
+import com.voiceai.UIConstants;
 import javafx.application.Platform;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;

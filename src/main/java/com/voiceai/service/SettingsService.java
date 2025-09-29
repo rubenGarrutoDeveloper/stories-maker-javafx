@@ -13,10 +13,6 @@ import java.nio.file.Paths;
 import java.util.Base64;
 import java.util.logging.Logger;
 
-/**
- * Service for managing application settings and configuration.
- * Handles API keys, user preferences, and persistent configuration storage.
- */
 public class SettingsService {
 
     private static final Logger logger = Logger.getLogger(SettingsService.class.getName());
@@ -33,6 +29,7 @@ public class SettingsService {
     private static final String WINDOW_HEIGHT_KEY = "windowHeight";
     private static final String WINDOW_X_KEY = "windowX";
     private static final String WINDOW_Y_KEY = "windowY";
+    private static final String AUDIO_SOURCE_KEY = "audioSourceName";
     private static final String VERSION_KEY = "configVersion";
 
     // Default values
@@ -48,9 +45,6 @@ public class SettingsService {
     private final Path configFilePath;
     private ObjectNode configuration;
 
-    /**
-     * Current API key validation state
-     */
     public enum ApiKeyState {
         NOT_SET,
         INVALID,
@@ -58,9 +52,6 @@ public class SettingsService {
         VALIDATING
     }
 
-    /**
-     * Settings operation result
-     */
     public static class SettingsResult {
         private final boolean success;
         private final String message;
@@ -93,25 +84,14 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Creates a new SettingsService
-     *
-     * @param notificationService the notification service for user feedback
-     */
     public SettingsService(NotificationService notificationService) {
         this.notificationService = notificationService;
         this.objectMapper = new ObjectMapper();
         this.configFilePath = getConfigFilePath();
 
-        // Load or create configuration
         loadConfiguration();
     }
 
-    /**
-     * Gets the API key (decrypted)
-     *
-     * @return the API key or null if not set
-     */
     public String getApiKey() {
         String encryptedKey = configuration.path(API_KEY_KEY).asText(null);
         if (encryptedKey == null || encryptedKey.trim().isEmpty()) {
@@ -120,12 +100,6 @@ public class SettingsService {
         return decryptApiKey(encryptedKey);
     }
 
-    /**
-     * Sets and encrypts the API key
-     *
-     * @param apiKey the API key to store
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult setApiKey(String apiKey) {
         try {
             if (apiKey == null || apiKey.trim().isEmpty()) {
@@ -146,30 +120,14 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Checks if an API key is currently set
-     *
-     * @return true if API key is set
-     */
     public boolean hasApiKey() {
         return getApiKey() != null;
     }
 
-    /**
-     * Gets the current theme setting
-     *
-     * @return the theme name
-     */
     public String getTheme() {
         return configuration.path(THEME_KEY).asText(DEFAULT_THEME);
     }
 
-    /**
-     * Sets the theme preference
-     *
-     * @param theme the theme name (light, dark, etc.)
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult setTheme(String theme) {
         if (theme == null || theme.trim().isEmpty()) {
             theme = DEFAULT_THEME;
@@ -180,21 +138,10 @@ public class SettingsService {
         return saveConfiguration();
     }
 
-    /**
-     * Gets the current language setting
-     *
-     * @return the language code
-     */
     public String getLanguage() {
         return configuration.path(LANGUAGE_KEY).asText(DEFAULT_LANGUAGE);
     }
 
-    /**
-     * Sets the language preference
-     *
-     * @param language the language code (it, en, es, fr, de)
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult setLanguage(String language) {
         if (language == null || language.trim().isEmpty()) {
             language = DEFAULT_LANGUAGE;
@@ -205,21 +152,10 @@ public class SettingsService {
         return saveConfiguration();
     }
 
-    /**
-     * Gets the real-time transcription preference
-     *
-     * @return true if real-time transcription is enabled
-     */
     public boolean isRealTimeTranscriptionEnabled() {
         return configuration.path(REAL_TIME_TRANSCRIPTION_KEY).asBoolean(DEFAULT_REAL_TIME_TRANSCRIPTION);
     }
 
-    /**
-     * Sets the real-time transcription preference
-     *
-     * @param enabled true to enable real-time transcription
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult setRealTimeTranscriptionEnabled(boolean enabled) {
         configuration.put(REAL_TIME_TRANSCRIPTION_KEY, enabled);
         notificationService.showInfo("Real-time transcription " + (enabled ? "enabled" : "disabled"));
@@ -227,20 +163,29 @@ public class SettingsService {
     }
 
     /**
-     * Gets the default save path
-     *
-     * @return the default save path or null if not set
+     * Gets the saved audio source name
      */
+    public String getAudioSourceName() {
+        return configuration.path(AUDIO_SOURCE_KEY).asText(null);
+    }
+
+    /**
+     * Sets the audio source name to be saved
+     */
+    public SettingsResult setAudioSourceName(String audioSourceName) {
+        if (audioSourceName == null || audioSourceName.trim().isEmpty()) {
+            configuration.remove(AUDIO_SOURCE_KEY);
+        } else {
+            configuration.put(AUDIO_SOURCE_KEY, audioSourceName.trim());
+            notificationService.showInfo("Audio source saved: " + audioSourceName);
+        }
+        return saveConfiguration();
+    }
+
     public String getDefaultSavePath() {
         return configuration.path(DEFAULT_SAVE_PATH_KEY).asText(null);
     }
 
-    /**
-     * Sets the default save path
-     *
-     * @param path the default save path
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult setDefaultSavePath(String path) {
         if (path == null || path.trim().isEmpty()) {
             configuration.remove(DEFAULT_SAVE_PATH_KEY);
@@ -250,51 +195,22 @@ public class SettingsService {
         return saveConfiguration();
     }
 
-    /**
-     * Gets the window width preference
-     *
-     * @return the window width
-     */
     public double getWindowWidth() {
         return configuration.path(WINDOW_WIDTH_KEY).asDouble(DEFAULT_WINDOW_WIDTH);
     }
 
-    /**
-     * Gets the window height preference
-     *
-     * @return the window height
-     */
     public double getWindowHeight() {
         return configuration.path(WINDOW_HEIGHT_KEY).asDouble(DEFAULT_WINDOW_HEIGHT);
     }
 
-    /**
-     * Gets the window X position preference
-     *
-     * @return the window X position or -1 if not set
-     */
     public double getWindowX() {
         return configuration.path(WINDOW_X_KEY).asDouble(-1);
     }
 
-    /**
-     * Gets the window Y position preference
-     *
-     * @return the window Y position or -1 if not set
-     */
     public double getWindowY() {
         return configuration.path(WINDOW_Y_KEY).asDouble(-1);
     }
 
-    /**
-     * Saves window position and size
-     *
-     * @param x window X position
-     * @param y window Y position
-     * @param width window width
-     * @param height window height
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult saveWindowGeometry(double x, double y, double width, double height) {
         configuration.put(WINDOW_X_KEY, x);
         configuration.put(WINDOW_Y_KEY, y);
@@ -304,11 +220,6 @@ public class SettingsService {
         return saveConfiguration();
     }
 
-    /**
-     * Resets all settings to defaults
-     *
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult resetToDefaults() {
         try {
             configuration = objectMapper.createObjectNode();
@@ -327,15 +238,8 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Exports settings to a file
-     *
-     * @param exportPath the path to export to
-     * @return SettingsResult indicating success or failure
-     */
     public SettingsResult exportSettings(String exportPath) {
         try {
-            // Create a copy without the API key for security
             ObjectNode exportConfig = configuration.deepCopy();
             exportConfig.remove(API_KEY_KEY);
 
@@ -352,31 +256,20 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Gets the configuration file path
-     *
-     * @return the configuration file path
-     */
     private Path getConfigFilePath() {
-        // Use user home directory for config storage
         String userHome = System.getProperty("user.home");
         Path appDir = Paths.get(userHome, APP_DIR_NAME);
 
-        // Create app directory if it doesn't exist
         try {
             Files.createDirectories(appDir);
         } catch (IOException e) {
             logger.warning("Failed to create app directory: " + e.getMessage());
-            // Fallback to current directory
             return Paths.get(CONFIG_FILE_NAME);
         }
 
         return appDir.resolve(CONFIG_FILE_NAME);
     }
 
-    /**
-     * Loads configuration from file or creates default
-     */
     private void loadConfiguration() {
         try {
             if (Files.exists(configFilePath)) {
@@ -386,7 +279,6 @@ public class SettingsService {
                 if (loadedConfig.isObject()) {
                     configuration = (ObjectNode) loadedConfig;
 
-                    // Check for version migration
                     String configVersion = configuration.path(VERSION_KEY).asText("");
                     if (!CURRENT_CONFIG_VERSION.equals(configVersion)) {
                         migrateConfiguration(configVersion);
@@ -397,7 +289,6 @@ public class SettingsService {
                     throw new IOException("Invalid configuration format");
                 }
             } else {
-                // Create default configuration
                 configuration = objectMapper.createObjectNode();
                 applyDefaults();
                 saveConfiguration();
@@ -408,15 +299,11 @@ public class SettingsService {
             logger.warning("Failed to load configuration: " + e.getMessage());
             notificationService.showWarning("Failed to load settings, using defaults");
 
-            // Create default configuration
             configuration = objectMapper.createObjectNode();
             applyDefaults();
         }
     }
 
-    /**
-     * Applies default configuration values
-     */
     private void applyDefaults() {
         configuration.put(THEME_KEY, DEFAULT_THEME);
         configuration.put(LANGUAGE_KEY, DEFAULT_LANGUAGE);
@@ -426,32 +313,18 @@ public class SettingsService {
         configuration.put(VERSION_KEY, CURRENT_CONFIG_VERSION);
     }
 
-    /**
-     * Migrates configuration from older versions
-     *
-     * @param oldVersion the old configuration version
-     */
     private void migrateConfiguration(String oldVersion) {
         logger.info("Migrating configuration from version " + oldVersion + " to " + CURRENT_CONFIG_VERSION);
 
-        // Add migration logic here as needed
-        // For now, just update the version
         configuration.put(VERSION_KEY, CURRENT_CONFIG_VERSION);
 
         notificationService.showInfo("Configuration migrated to version " + CURRENT_CONFIG_VERSION);
     }
 
-    /**
-     * Saves configuration to file
-     *
-     * @return SettingsResult indicating success or failure
-     */
     private SettingsResult saveConfiguration() {
         try {
-            // Ensure parent directory exists
             Files.createDirectories(configFilePath.getParent());
 
-            // Write configuration to file
             objectMapper.writerWithDefaultPrettyPrinter()
                     .writeValue(configFilePath.toFile(), configuration);
 
@@ -465,15 +338,7 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Simple encryption for API key (Base64 encoding for now)
-     * Note: This is basic obfuscation, not secure encryption
-     *
-     * @param apiKey the API key to encrypt
-     * @return the encrypted API key
-     */
     private String encryptApiKey(String apiKey) {
-        // Simple Base64 encoding with a basic XOR cipher
         byte[] keyBytes = apiKey.getBytes(StandardCharsets.UTF_8);
         byte[] xorKey = "StoriesMaker2024".getBytes(StandardCharsets.UTF_8);
 
@@ -484,12 +349,6 @@ public class SettingsService {
         return Base64.getEncoder().encodeToString(keyBytes);
     }
 
-    /**
-     * Simple decryption for API key (Base64 decoding)
-     *
-     * @param encryptedKey the encrypted API key
-     * @return the decrypted API key
-     */
     private String decryptApiKey(String encryptedKey) {
         try {
             byte[] keyBytes = Base64.getDecoder().decode(encryptedKey);
@@ -507,39 +366,25 @@ public class SettingsService {
         }
     }
 
-    /**
-     * Gets the configuration file location for display purposes
-     *
-     * @return the configuration file path as a string
-     */
     public String getConfigurationFileLocation() {
         return configFilePath.toString();
     }
 
-    /**
-     * Validates the configuration integrity
-     *
-     * @return true if configuration is valid
-     */
     public boolean validateConfiguration() {
         try {
-            // Basic validation checks
             if (configuration == null) {
                 return false;
             }
 
-            // Check for required version field
             if (!configuration.has(VERSION_KEY)) {
                 return false;
             }
 
-            // Validate theme value
             String theme = getTheme();
             if (theme == null || theme.trim().isEmpty()) {
                 return false;
             }
 
-            // Validate language value
             String language = getLanguage();
             if (language == null || language.trim().isEmpty()) {
                 return false;
