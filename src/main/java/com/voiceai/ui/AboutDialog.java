@@ -41,7 +41,7 @@ public class AboutDialog {
     private static final String AUTHOR_PHOTO_PATH = "/author-photo.jpg";
     private static final int PHOTO_SIZE = 150;
     private static final int DIALOG_WIDTH = 700;
-    private static final int DIALOG_MIN_HEIGHT = 550;
+    private static final double DIALOG_MAX_HEIGHT_RATIO = 0.85; // 85% of screen height
     private static final int WHATS_NEW_MAX_VERSIONS = 1;
 
     private final Stage ownerStage;
@@ -66,14 +66,30 @@ public class AboutDialog {
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.initOwner(ownerStage);
         dialog.setTitle("About " + UIConstants.APP_TITLE);
-        dialog.setResizable(true);
+        dialog.setResizable(false);
+
+        // Get screen bounds to constrain dialog size
+        javafx.stage.Screen screen = javafx.stage.Screen.getPrimary();
+        javafx.geometry.Rectangle2D screenBounds = screen.getVisualBounds();
+        double maxHeight = screenBounds.getHeight() * DIALOG_MAX_HEIGHT_RATIO;
 
         // Create dialog content
         VBox content = createDialogContent();
 
-        dialog.getDialogPane().setContent(content);
+        // Wrap content in ScrollPane to handle overflow
+        ScrollPane scrollPane = new ScrollPane(content);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setMaxHeight(maxHeight);
+        scrollPane.setStyle(
+                "-fx-background-color: white; " +
+                        "-fx-background: white;"
+        );
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        dialog.getDialogPane().setContent(scrollPane);
         dialog.getDialogPane().setPrefWidth(DIALOG_WIDTH);
-        dialog.getDialogPane().setMinHeight(DIALOG_MIN_HEIGHT);
+        dialog.getDialogPane().setMaxHeight(maxHeight);
 
         // Style the dialog pane
         dialog.getDialogPane().setStyle(
@@ -125,7 +141,7 @@ public class AboutDialog {
     private VBox createHeader() {
         VBox header = new VBox(5);
         header.setAlignment(Pos.CENTER);
-        header.setPadding(new Insets(30, 20, 30, 20));
+        header.setPadding(new Insets(25, 20, 25, 20));
         header.setStyle(
                 "-fx-background-color: linear-gradient(to right, " +
                         UIConstants.PRIMARY_COLOR + ", " +
@@ -156,7 +172,7 @@ public class AboutDialog {
      */
     private HBox createContentSection() {
         HBox contentBox = new HBox(30);
-        contentBox.setPadding(new Insets(30, 30, 20, 30));
+        contentBox.setPadding(new Insets(25, 30, 15, 30));
         contentBox.setAlignment(Pos.TOP_LEFT);
 
         // Left side - Author photo
@@ -382,7 +398,7 @@ public class AboutDialog {
      */
     private VBox createWhatsNewSection() {
         VBox whatsNewBox = new VBox(15);
-        whatsNewBox.setPadding(new Insets(20, 30, 20, 30));
+        whatsNewBox.setPadding(new Insets(15, 30, 15, 30));
         whatsNewBox.setStyle(
                 "-fx-background-color: #f9fafb; " +
                         "-fx-border-color: " + UIConstants.BORDER_COLOR + "; " +
@@ -428,27 +444,16 @@ public class AboutDialog {
             return whatsNewBox;
         }
 
-        // Create scrollable content
+        // Create container for the latest version only
         VBox versionsContainer = new VBox(15);
 
-        for (ChangelogVersion version : latestVersions) {
-            VBox versionBox = createVersionBox(version);
+        // Show only the first (latest) version
+        if (!latestVersions.isEmpty()) {
+            VBox versionBox = createVersionBox(latestVersions.get(0));
             versionsContainer.getChildren().add(versionBox);
         }
 
-        // Wrap in scroll pane if content is long
-        ScrollPane scrollPane = new ScrollPane(versionsContainer);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setMaxHeight(200);
-        scrollPane.setStyle(
-                "-fx-background-color: transparent; " +
-                        "-fx-background: transparent; " +
-                        "-fx-border-color: transparent;"
-        );
-        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-
-        whatsNewBox.getChildren().addAll(headerBox, scrollPane);
+        whatsNewBox.getChildren().addAll(headerBox, versionsContainer);
 
         return whatsNewBox;
     }
@@ -524,7 +529,7 @@ public class AboutDialog {
     private VBox createFooter() {
         VBox footer = new VBox(10);
         footer.setAlignment(Pos.CENTER);
-        footer.setPadding(new Insets(20, 20, 20, 20));
+        footer.setPadding(new Insets(15, 20, 15, 20));
         footer.setStyle(
                 "-fx-background-color: " + UIConstants.BACKGROUND_COLOR + "; " +
                         "-fx-border-color: " + UIConstants.BORDER_COLOR + "; " +
