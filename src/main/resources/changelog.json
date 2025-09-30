@@ -1,0 +1,112 @@
+{
+  "versions": [
+    {
+      "version": "1.1.0",
+      "date": "2025-09-30",
+      "updates": [
+        {
+          "type": "feature",
+          "description": "Aggiunta sezione \"Novità\" nel dialogo About che mostra le ultime funzionalità e correzioni"
+        },
+        {
+          "type": "feature",
+          "description": "Implementato sistema di changelog con file JSON per tracciare gli aggiornamenti"
+        },
+        {
+          "type": "improvement",
+          "description": "Migliorato il dialogo About con layout più ampio e design ottimizzato"
+        }
+      ]
+    },
+    {
+      "version": "1.0.0",
+      "date": "2025-09-30",
+      "updates": [
+        {
+          "type": "feature",
+          "description": "Trascrizione audio in tempo reale con OpenAI Whisper"
+        },
+        {
+          "type": "feature",
+          "description": "Integrazione chat AI con ChatGPT per elaborare le trascrizioni"
+        },
+        {
+          "type": "feature",
+          "description": "Supporto per registrazione da microfono e audio di sistema"
+        },
+        {
+          "type": "feature",
+          "description": "Selezione dinamica delle sorgenti audio disponibili"
+        },
+        {
+          "type": "feature",
+          "description": "Salvataggio e caricamento delle trascrizioni in formato TXT, MD e JSON"
+        }
+      ]
+    },
+    {
+      "version": "0.9.0",
+      "date": "2025-09-15",
+      "updates": [
+        {
+          "type": "feature",
+          "description": "Aggiunto supporto per trascrizione in tempo reale con chunking"
+        },
+        {
+          "type": "improvement",
+          "description": "Migliorata la gestione dello stato dell'applicazione"
+        },
+        {
+          "type": "fix",
+          "description": "Risolto problema con la conversione audio in formato WAV"
+        }
+      ]
+    },
+    {
+      "version": "0.8.0",
+      "date": "2025-09-01",
+      "updates": [
+        {
+          "type": "feature",
+          "description": "Implementata interfaccia chat con streaming delle risposte"
+        },
+        {
+          "type": "improvement",
+          "description": "Ottimizzata la gestione della memoria durante la registrazione"
+        },
+        {
+          "type": "fix",
+          "description": "Corretta sincronizzazione tra registrazione e trascrizione"
+        }
+      ]
+    },
+    {
+      "version": "0.7.0",
+      "date": "2025-08-15",
+      "updates": [
+        {
+          "type": "feature",
+          "description": "Aggiunto sistema di notifiche per feedback utente"
+        },
+        {
+          "type": "improvement",
+          "description": "Migliorata l'interfaccia utente con nuovo design"
+        }
+      ]
+    },
+    {
+      "version": "0.6.0",
+      "date": "2025-08-01",
+      "updates": [
+        {
+          "type": "feature",
+          "description": "Implementato servizio di registrazione audio multi-sorgente"
+        },
+        {
+          "type": "fix",
+          "description": "Risolti problemi di compatibilità con diversi mixer audio"
+        }
+      ]
+    }
+  ]
+}

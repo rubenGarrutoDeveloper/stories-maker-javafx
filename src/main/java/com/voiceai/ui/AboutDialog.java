@@ -1,6 +1,9 @@
 package com.voiceai.ui;
 
 import com.voiceai.constant.UIConstants;
+import com.voiceai.service.ChangelogService;
+import com.voiceai.service.ChangelogService.ChangelogVersion;
+import com.voiceai.service.ChangelogService.ChangelogUpdate;
 import com.voiceai.util.AppVersion;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,6 +19,7 @@ import javafx.stage.Stage;
 
 import java.awt.Desktop;
 import java.net.URI;
+import java.util.List;
 import java.util.logging.Logger;
 
 /**
@@ -36,11 +40,13 @@ public class AboutDialog {
 
     private static final String AUTHOR_PHOTO_PATH = "/author-photo.jpg";
     private static final int PHOTO_SIZE = 150;
-    private static final int DIALOG_WIDTH = 600;
-    private static final int DIALOG_MIN_HEIGHT = 400;
+    private static final int DIALOG_WIDTH = 700;
+    private static final int DIALOG_MIN_HEIGHT = 550;
+    private static final int WHATS_NEW_MAX_VERSIONS = 1;
 
     private final Stage ownerStage;
     private Dialog<Void> dialog;
+    private final ChangelogService changelogService;
 
     /**
      * Creates a new AboutDialog
@@ -49,6 +55,7 @@ public class AboutDialog {
      */
     public AboutDialog(Stage ownerStage) {
         this.ownerStage = ownerStage;
+        this.changelogService = new ChangelogService();
     }
 
     /**
@@ -59,7 +66,7 @@ public class AboutDialog {
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.initOwner(ownerStage);
         dialog.setTitle("About " + UIConstants.APP_TITLE);
-        dialog.setResizable(false);
+        dialog.setResizable(true);
 
         // Create dialog content
         VBox content = createDialogContent();
@@ -101,10 +108,13 @@ public class AboutDialog {
         // Content section with author and app info
         HBox contentSection = createContentSection();
 
+        // What's New section
+        VBox whatsNewSection = createWhatsNewSection();
+
         // Footer with GitHub link
         VBox footer = createFooter();
 
-        mainContainer.getChildren().addAll(header, contentSection, footer);
+        mainContainer.getChildren().addAll(header, contentSection, whatsNewSection, footer);
 
         return mainContainer;
     }
@@ -146,7 +156,7 @@ public class AboutDialog {
      */
     private HBox createContentSection() {
         HBox contentBox = new HBox(30);
-        contentBox.setPadding(new Insets(30, 30, 30, 30));
+        contentBox.setPadding(new Insets(30, 30, 20, 30));
         contentBox.setAlignment(Pos.TOP_LEFT);
 
         // Left side - Author photo
@@ -319,7 +329,7 @@ public class AboutDialog {
         );
         descriptionText.getChildren().add(description);
         descriptionText.setTextAlignment(TextAlignment.JUSTIFY);
-        descriptionText.setMaxWidth(350);
+        descriptionText.setMaxWidth(400);
 
         descriptionSection.getChildren().addAll(descriptionLabel, descriptionText);
 
@@ -353,8 +363,6 @@ public class AboutDialog {
                 "✓ Supporto per sorgenti audio multiple"
         };
 
-        ;
-
         for (String feature : features) {
             Label featureLabel = new Label(feature);
             featureLabel.setStyle(
@@ -367,6 +375,147 @@ public class AboutDialog {
         featuresBox.getChildren().addAll(featuresLabel, featuresList);
 
         return featuresBox;
+    }
+
+    /**
+     * Creates the What's New section with recent updates
+     */
+    private VBox createWhatsNewSection() {
+        VBox whatsNewBox = new VBox(15);
+        whatsNewBox.setPadding(new Insets(20, 30, 20, 30));
+        whatsNewBox.setStyle(
+                "-fx-background-color: #f9fafb; " +
+                        "-fx-border-color: " + UIConstants.BORDER_COLOR + "; " +
+                        "-fx-border-width: 1 0 1 0;"
+        );
+
+        // Section header
+        HBox headerBox = new HBox(10);
+        headerBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label headerLabel = new Label("🎉 Novità");
+        headerLabel.setStyle(
+                "-fx-font-size: 16px; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-text-fill: " + UIConstants.PRIMARY_COLOR + ";"
+        );
+
+        headerBox.getChildren().add(headerLabel);
+
+        // Check if changelog is available
+        if (!changelogService.isChangelogAvailable()) {
+            Label noChangelogLabel = new Label("Nessuna informazione disponibile sul changelog.");
+            noChangelogLabel.setStyle(
+                    "-fx-font-size: 12px; " +
+                            "-fx-text-fill: " + UIConstants.GRAY_COLOR + "; " +
+                            "-fx-font-style: italic;"
+            );
+            whatsNewBox.getChildren().addAll(headerBox, noChangelogLabel);
+            return whatsNewBox;
+        }
+
+        // Load latest versions
+        List<ChangelogVersion> latestVersions = changelogService.getLatestVersions(WHATS_NEW_MAX_VERSIONS);
+
+        if (latestVersions.isEmpty()) {
+            Label noUpdatesLabel = new Label("Nessun aggiornamento disponibile.");
+            noUpdatesLabel.setStyle(
+                    "-fx-font-size: 12px; " +
+                            "-fx-text-fill: " + UIConstants.GRAY_COLOR + "; " +
+                            "-fx-font-style: italic;"
+            );
+            whatsNewBox.getChildren().addAll(headerBox, noUpdatesLabel);
+            return whatsNewBox;
+        }
+
+        // Create scrollable content
+        VBox versionsContainer = new VBox(15);
+
+        for (ChangelogVersion version : latestVersions) {
+            VBox versionBox = createVersionBox(version);
+            versionsContainer.getChildren().add(versionBox);
+        }
+
+        // Wrap in scroll pane if content is long
+        ScrollPane scrollPane = new ScrollPane(versionsContainer);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setMaxHeight(200);
+        scrollPane.setStyle(
+                "-fx-background-color: transparent; " +
+                        "-fx-background: transparent; " +
+                        "-fx-border-color: transparent;"
+        );
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        whatsNewBox.getChildren().addAll(headerBox, scrollPane);
+
+        return whatsNewBox;
+    }
+
+    /**
+     * Creates a box for a single version with its updates
+     */
+    private VBox createVersionBox(ChangelogVersion version) {
+        VBox versionBox = new VBox(8);
+        versionBox.setStyle(
+                "-fx-background-color: white; " +
+                        "-fx-border-color: " + UIConstants.BORDER_COLOR + "; " +
+                        "-fx-border-width: 1px; " +
+                        "-fx-border-radius: 8px; " +
+                        "-fx-padding: 12px; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 5, 0, 0, 1);"
+        );
+
+        // Version header
+        HBox versionHeader = new HBox(10);
+        versionHeader.setAlignment(Pos.CENTER_LEFT);
+
+        Label versionLabel = new Label("v" + version.getVersion());
+        versionLabel.setStyle(
+                "-fx-font-size: 14px; " +
+                        "-fx-font-weight: bold; " +
+                        "-fx-text-fill: " + UIConstants.SECONDARY_COLOR + ";"
+        );
+
+        Label dateLabel = new Label(version.getFormattedDate());
+        dateLabel.setStyle(
+                "-fx-font-size: 11px; " +
+                        "-fx-text-fill: " + UIConstants.GRAY_COLOR + "; " +
+                        "-fx-padding: 2px 8px; " +
+                        "-fx-background-color: " + UIConstants.LIGHT_GRAY_COLOR + "; " +
+                        "-fx-background-radius: 10px;"
+        );
+
+        versionHeader.getChildren().addAll(versionLabel, dateLabel);
+
+        // Updates list
+        VBox updatesList = new VBox(5);
+
+        for (ChangelogUpdate update : version.getUpdates()) {
+            HBox updateBox = new HBox(8);
+            updateBox.setAlignment(Pos.TOP_LEFT);
+
+            Label iconLabel = new Label(update.getIcon());
+            iconLabel.setStyle("-fx-font-size: 14px;");
+            iconLabel.setMinWidth(20);
+
+            Label updateLabel = new Label(update.getDescription());
+            updateLabel.setStyle(
+                    "-fx-font-size: 12px; " +
+                            "-fx-text-fill: #333; " +
+                            "-fx-wrap-text: true;"
+            );
+            updateLabel.setWrapText(true);
+            updateLabel.setMaxWidth(550);
+
+            updateBox.getChildren().addAll(iconLabel, updateLabel);
+            updatesList.getChildren().add(updateBox);
+        }
+
+        versionBox.getChildren().addAll(versionHeader, updatesList);
+
+        return versionBox;
     }
 
     /**
