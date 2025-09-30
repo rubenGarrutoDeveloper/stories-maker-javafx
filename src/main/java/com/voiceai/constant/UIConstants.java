@@ -23,7 +23,7 @@ public class UIConstants {
     public static final String TESTING_TEXT = "Testing...";
     public static final String DISCONNECTED_STATUS = "Disconnected";
     public static final String TRANSCRIPT_HEADER = "TRANSCRIPT";
-    public static final String CHAT_HEADER = "💬 CHAT GPT";
+    public static final String CHAT_HEADER = "💬 CHAT AI";
     public static final String AUDIO_SOURCE_LABEL = "Audio Source:";
     public static final String REFRESH_SOURCES_TEXT = "🔄";
 

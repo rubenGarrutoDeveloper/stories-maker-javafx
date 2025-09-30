@@ -3,14 +3,18 @@ package com.voiceai;
 import com.voiceai.constant.UIConstants;
 import com.voiceai.service.*;
 import com.voiceai.state.ApplicationState;
+import com.voiceai.ui.AboutDialog;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
 import java.util.List;
+import java.util.logging.Logger;
 
 public class Main extends Application {
+
+    private static final Logger logger = Logger.getLogger(Main.class.getName());
 
     // Services
     private NotificationService notificationService;
@@ -156,6 +160,22 @@ public class Main extends Application {
         // Audio source selection handlers
         uiService.getAudioSourceComboBox().setOnAction(e -> onAudioSourceSelected());
         uiService.getRefreshSourcesButton().setOnAction(e -> refreshAudioSources());
+
+        uiService.getAboutButton().setOnAction(e -> showAboutDialog());
+    }
+
+    /**
+     * Shows the About dialog
+     */
+    private void showAboutDialog() {
+        try {
+            AboutDialog aboutDialog = new AboutDialog(primaryStage);
+            aboutDialog.show();
+            logger.info("About dialog displayed");
+        } catch (Exception e) {
+            notificationService.showError("Failed to show About dialog", e);
+            logger.severe("Error showing About dialog: " + e.getMessage());
+        }
     }
 
     /**

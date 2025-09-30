@@ -30,6 +30,7 @@ public class UIService {
     private CheckBox realTimeCheckBox;
     private ComboBox<AudioRecordingService.AudioSource> audioSourceComboBox;
     private Button refreshSourcesButton;
+    private Button aboutButton;
 
     public Scene createAndShowUI(Stage stage, double windowWidth, double windowHeight,
                                  String existingApiKey, boolean useRealTimeTranscription) {
@@ -50,8 +51,7 @@ public class UIService {
     private VBox createApiSection(String existingApiKey) {
         VBox apiSection = new VBox(UIConstants.SECTION_SPACING);
 
-        Label titleLabel = new Label(UIConstants.APP_TITLE);
-        titleLabel.setStyle(UIConstants.TITLE_STYLE);
+        HBox titleRow = createTitleRow();
 
         HBox apiKeyBox = new HBox(UIConstants.CONTROL_SPACING);
         apiKeyBox.setAlignment(Pos.CENTER_LEFT);
@@ -80,9 +80,37 @@ public class UIService {
         // Audio source selection row
         HBox audioSourceBox = createAudioSourceSelector();
 
-        apiSection.getChildren().addAll(titleLabel, apiKeyBox, audioSourceBox);
+        apiSection.getChildren().addAll(titleRow, apiKeyBox, audioSourceBox);
 
         return apiSection;
+    }
+
+    /**
+     * Creates the title row with app title and About button
+     */
+    private HBox createTitleRow() {
+        HBox titleRow = new HBox(15);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label titleLabel = new Label(UIConstants.APP_TITLE);
+        titleLabel.setStyle(UIConstants.TITLE_STYLE);
+        HBox.setHgrow(titleLabel, Priority.ALWAYS);
+
+        // About button
+        aboutButton = new Button("ⓘ About");
+        aboutButton.setStyle(
+                "-fx-background-color: " + UIConstants.INFO_COLOR + "; " +
+                        "-fx-text-fill: white; " +
+                        "-fx-border-radius: 5px; " +
+                        "-fx-padding: 6px 12px; " +
+                        "-fx-font-size: 12px; " +
+                        "-fx-cursor: hand;"
+        );
+        aboutButton.setTooltip(new Tooltip("About " + UIConstants.APP_TITLE));
+
+        titleRow.getChildren().addAll(titleLabel, aboutButton);
+
+        return titleRow;
     }
 
     private HBox createAudioSourceSelector() {
@@ -241,4 +269,5 @@ public class UIService {
     public CheckBox getRealTimeCheckBox() { return realTimeCheckBox; }
     public ComboBox<AudioRecordingService.AudioSource> getAudioSourceComboBox() { return audioSourceComboBox; }
     public Button getRefreshSourcesButton() { return refreshSourcesButton; }
+    public Button getAboutButton() { return aboutButton; }
 }
