@@ -9,10 +9,6 @@
           "description": "Aggiunta sezione \"Novità\" nel dialogo About che mostra le ultime funzionalità e correzioni"
         },
         {
-          "type": "feature",
-          "description": "Implementato sistema di changelog con file JSON per tracciare gli aggiornamenti"
-        },
-        {
           "type": "improvement",
           "description": "Migliorato il dialogo About con layout più ampio e design ottimizzato"
         }
