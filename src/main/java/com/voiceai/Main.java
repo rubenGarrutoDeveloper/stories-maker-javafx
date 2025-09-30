@@ -47,21 +47,24 @@ public class Main extends Application {
         // Set up state change listener
         appState.addStateChangeListener(this::onStateChanged);
 
-        // Apply window geometry and title
+        // Apply title and set fullscreen
         primaryStage.setTitle(UIConstants.APP_TITLE);
-        applyWindowGeometry(primaryStage);
 
-        // Create and show UI
+        // Create and show UI with default dimensions
         Scene scene = uiService.createAndShowUI(
                 primaryStage,
-                settingsService.getWindowWidth(),
-                settingsService.getWindowHeight(),
+                UIConstants.MAIN_WINDOW_WIDTH,
+                UIConstants.MAIN_WINDOW_HEIGHT,
                 settingsService.getApiKey(),
                 settingsService.isRealTimeTranscriptionEnabled()
         );
 
         primaryStage.setScene(scene);
         primaryStage.setResizable(true);
+
+        // Set window to maximized (fullscreen)
+        primaryStage.setMaximized(true);
+
         primaryStage.show();
 
         // Initialize services with UI components
@@ -76,9 +79,8 @@ public class Main extends Application {
         // Show startup notification
         notificationService.showInfo("StorieS Maker initialized successfully");
 
-        // Save window geometry on close
+        // Cleanup on close
         primaryStage.setOnCloseRequest(event -> {
-            saveWindowGeometry();
             shutdown();
         });
     }
@@ -127,25 +129,6 @@ public class Main extends Application {
 
         notificationService.showInfo("Settings loaded from: " +
                 settingsService.getConfigurationFileLocation());
-    }
-
-    private void applyWindowGeometry(Stage stage) {
-        double x = settingsService.getWindowX();
-        double y = settingsService.getWindowY();
-
-        if (x >= 0 && y >= 0) {
-            stage.setX(x);
-            stage.setY(y);
-        }
-    }
-
-    private void saveWindowGeometry() {
-        if (primaryStage != null) {
-            settingsService.saveWindowGeometry(
-                    primaryStage.getX(), primaryStage.getY(),
-                    primaryStage.getWidth(), primaryStage.getHeight()
-            );
-        }
     }
 
     private void setupEventHandlers() {
