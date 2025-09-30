@@ -1,4 +1,4 @@
-package com.voiceai;
+package com.voiceai.constant;
 
 public class UIConstants {
 

@@ -1,5 +1,6 @@
 package com.voiceai;
 
+import com.voiceai.constant.UIConstants;
 import com.voiceai.service.*;
 import com.voiceai.state.ApplicationState;
 import javafx.application.Application;

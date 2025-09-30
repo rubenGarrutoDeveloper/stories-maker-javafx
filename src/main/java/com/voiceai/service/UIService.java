@@ -1,6 +1,6 @@
 package com.voiceai.service;
 
-import com.voiceai.UIConstants;
+import com.voiceai.constant.UIConstants;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
