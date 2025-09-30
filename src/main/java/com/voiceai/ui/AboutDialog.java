@@ -5,6 +5,7 @@ import com.voiceai.service.ChangelogService;
 import com.voiceai.service.ChangelogService.ChangelogVersion;
 import com.voiceai.service.ChangelogService.ChangelogUpdate;
 import com.voiceai.util.AppVersion;
+import javafx.animation.*;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -16,6 +17,7 @@ import javafx.scene.text.TextAlignment;
 import javafx.scene.text.TextFlow;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.awt.Desktop;
 import java.net.URI;
@@ -39,14 +41,22 @@ public class AboutDialog {
     private static final String GITHUB_URL = "https://github.com/rubenGarrutoDeveloper/stories-maker-javafx";
 
     private static final String AUTHOR_PHOTO_PATH = "/author-photo.jpg";
+    private static final String BANANA_PHOTO_PATH = "/banana-author.jpg";
     private static final int PHOTO_SIZE = 150;
     private static final int DIALOG_WIDTH = 700;
-    private static final double DIALOG_MAX_HEIGHT_RATIO = 0.85; // 85% of screen height
+    private static final int DIALOG_MIN_HEIGHT = 550;
     private static final int WHATS_NEW_MAX_VERSIONS = 1;
+    private static final int EASTER_EGG_CLICKS = 10;
 
     private final Stage ownerStage;
     private Dialog<Void> dialog;
     private final ChangelogService changelogService;
+
+    // Easter egg variables
+    private int photoClickCount = 0;
+    private boolean easterEggActivated = false;
+    private ImageView authorPhotoView;
+    private StackPane photoContainer;
 
     /**
      * Creates a new AboutDialog
@@ -62,34 +72,22 @@ public class AboutDialog {
      * Shows the About dialog
      */
     public void show() {
+        // Reset easter egg state when dialog opens
+        photoClickCount = 0;
+        easterEggActivated = false;
+
         dialog = new Dialog<>();
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.initOwner(ownerStage);
         dialog.setTitle("About " + UIConstants.APP_TITLE);
-        dialog.setResizable(false);
-
-        // Get screen bounds to constrain dialog size
-        javafx.stage.Screen screen = javafx.stage.Screen.getPrimary();
-        javafx.geometry.Rectangle2D screenBounds = screen.getVisualBounds();
-        double maxHeight = screenBounds.getHeight() * DIALOG_MAX_HEIGHT_RATIO;
+        dialog.setResizable(true);
 
         // Create dialog content
         VBox content = createDialogContent();
 
-        // Wrap content in ScrollPane to handle overflow
-        ScrollPane scrollPane = new ScrollPane(content);
-        scrollPane.setFitToWidth(true);
-        scrollPane.setMaxHeight(maxHeight);
-        scrollPane.setStyle(
-                "-fx-background-color: white; " +
-                        "-fx-background: white;"
-        );
-        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-
-        dialog.getDialogPane().setContent(scrollPane);
+        dialog.getDialogPane().setContent(content);
         dialog.getDialogPane().setPrefWidth(DIALOG_WIDTH);
-        dialog.getDialogPane().setMaxHeight(maxHeight);
+        dialog.getDialogPane().setMinHeight(DIALOG_MIN_HEIGHT);
 
         // Style the dialog pane
         dialog.getDialogPane().setStyle(
@@ -141,7 +139,7 @@ public class AboutDialog {
     private VBox createHeader() {
         VBox header = new VBox(5);
         header.setAlignment(Pos.CENTER);
-        header.setPadding(new Insets(25, 20, 25, 20));
+        header.setPadding(new Insets(30, 20, 30, 20));
         header.setStyle(
                 "-fx-background-color: linear-gradient(to right, " +
                         UIConstants.PRIMARY_COLOR + ", " +
@@ -172,7 +170,7 @@ public class AboutDialog {
      */
     private HBox createContentSection() {
         HBox contentBox = new HBox(30);
-        contentBox.setPadding(new Insets(25, 30, 15, 30));
+        contentBox.setPadding(new Insets(30, 30, 20, 30));
         contentBox.setAlignment(Pos.TOP_LEFT);
 
         // Left side - Author photo
@@ -207,10 +205,10 @@ public class AboutDialog {
             double xOffset = (imgWidth - cropSize) / 2.0;
             double yOffset = (imgHeight - cropSize) / 2.0;
 
-            ImageView photoView = new ImageView(authorImage);
+            authorPhotoView = new ImageView(authorImage);
 
             // Set viewport to crop the center square of the image
-            photoView.setViewport(new javafx.geometry.Rectangle2D(
+            authorPhotoView.setViewport(new javafx.geometry.Rectangle2D(
                     xOffset,
                     yOffset,
                     cropSize,
@@ -218,13 +216,13 @@ public class AboutDialog {
             ));
 
             // Now scale to desired size
-            photoView.setFitWidth(PHOTO_SIZE);
-            photoView.setFitHeight(PHOTO_SIZE);
-            photoView.setPreserveRatio(true);
-            photoView.setSmooth(true);
+            authorPhotoView.setFitWidth(PHOTO_SIZE);
+            authorPhotoView.setFitHeight(PHOTO_SIZE);
+            authorPhotoView.setPreserveRatio(true);
+            authorPhotoView.setSmooth(true);
 
             // Container for the image
-            StackPane imageContainer = new StackPane(photoView);
+            StackPane imageContainer = new StackPane(authorPhotoView);
             imageContainer.setMaxSize(PHOTO_SIZE, PHOTO_SIZE);
             imageContainer.setMinSize(PHOTO_SIZE, PHOTO_SIZE);
             imageContainer.setPrefSize(PHOTO_SIZE, PHOTO_SIZE);
@@ -238,7 +236,7 @@ public class AboutDialog {
             imageContainer.setClip(clip);
 
             // Create outer container with circular border and shadow
-            StackPane photoContainer = new StackPane(imageContainer);
+            photoContainer = new StackPane(imageContainer);
             photoContainer.setStyle(
                     "-fx-background-color: white; " +
                             "-fx-background-radius: " + (PHOTO_SIZE / 2.0) + "px; " +
@@ -249,6 +247,10 @@ public class AboutDialog {
             );
             photoContainer.setMaxSize(PHOTO_SIZE, PHOTO_SIZE);
             photoContainer.setMinSize(PHOTO_SIZE, PHOTO_SIZE);
+
+            // Add click handler for easter egg
+            photoContainer.setOnMouseClicked(event -> handlePhotoClick());
+            photoContainer.setStyle(photoContainer.getStyle() + "-fx-cursor: hand;");
 
             photoBox.getChildren().add(photoContainer);
 
@@ -261,6 +263,118 @@ public class AboutDialog {
         }
 
         return photoBox;
+    }
+
+    /**
+     * Handles photo click events for easter egg
+     */
+    private void handlePhotoClick() {
+        if (easterEggActivated) {
+            return; // Already activated, don't count more clicks
+        }
+
+        photoClickCount++;
+        logger.info("Photo clicked: " + photoClickCount + "/" + EASTER_EGG_CLICKS);
+
+        // Add a subtle scale animation on each click
+        ScaleTransition scaleDown = new ScaleTransition(Duration.millis(50), photoContainer);
+        scaleDown.setToX(0.95);
+        scaleDown.setToY(0.95);
+
+        ScaleTransition scaleUp = new ScaleTransition(Duration.millis(50), photoContainer);
+        scaleUp.setToX(1.0);
+        scaleUp.setToY(1.0);
+
+        SequentialTransition pulse = new SequentialTransition(scaleDown, scaleUp);
+        pulse.play();
+
+        // Check if easter egg should be triggered
+        if (photoClickCount >= EASTER_EGG_CLICKS) {
+            triggerEasterEgg();
+        }
+    }
+
+    /**
+     * Triggers the banana easter egg
+     */
+    private void triggerEasterEgg() {
+        easterEggActivated = true;
+        logger.info("Easter egg activated! 🍌");
+
+        try {
+            // Load banana image
+            Image bananaImage = new Image(
+                    getClass().getResourceAsStream(BANANA_PHOTO_PATH)
+            );
+
+            // Calculate crop for banana image
+            double imgWidth = bananaImage.getWidth();
+            double imgHeight = bananaImage.getHeight();
+            double cropSize = Math.min(imgWidth, imgHeight);
+            double xOffset = (imgWidth - cropSize) / 2.0;
+            double yOffset = (imgHeight - cropSize) / 2.0;
+
+            // Create fade out animation
+            FadeTransition fadeOut = new FadeTransition(Duration.millis(300), photoContainer);
+            fadeOut.setFromValue(1.0);
+            fadeOut.setToValue(0.0);
+
+            // Create rotation animation for fun
+            RotateTransition rotate = new RotateTransition(Duration.millis(600), photoContainer);
+            rotate.setByAngle(360);
+
+            // Combine fade and rotate
+            ParallelTransition exitTransition = new ParallelTransition(fadeOut, rotate);
+
+            exitTransition.setOnFinished(event -> {
+                // Swap the image
+                authorPhotoView.setImage(bananaImage);
+                authorPhotoView.setViewport(new javafx.geometry.Rectangle2D(
+                        xOffset,
+                        yOffset,
+                        cropSize,
+                        cropSize
+                ));
+
+                // Create fade in animation
+                FadeTransition fadeIn = new FadeTransition(Duration.millis(300), photoContainer);
+                fadeIn.setFromValue(0.0);
+                fadeIn.setToValue(1.0);
+
+                // Add a bounce effect
+                ScaleTransition bounce = new ScaleTransition(Duration.millis(200), photoContainer);
+                bounce.setFromX(0.8);
+                bounce.setFromY(0.8);
+                bounce.setToX(1.1);
+                bounce.setToY(1.1);
+
+                ScaleTransition settle = new ScaleTransition(Duration.millis(100), photoContainer);
+                settle.setToX(1.0);
+                settle.setToY(1.0);
+
+                SequentialTransition bounceEffect = new SequentialTransition(bounce, settle);
+                ParallelTransition enterTransition = new ParallelTransition(fadeIn, bounceEffect);
+
+                enterTransition.play();
+
+                // Optional: Add a tooltip hint
+                Tooltip bananaTooltip = new Tooltip("🍌 You found the banana! 🍌");
+                Tooltip.install(photoContainer, bananaTooltip);
+
+                logger.info("Banana photo successfully displayed!");
+            });
+
+            exitTransition.play();
+
+            // TODO: Add sound effect here if desired
+            // Example: new AudioClip(getClass().getResource("/banana-sound.wav").toString()).play();
+
+        } catch (Exception e) {
+            logger.warning("Could not load banana photo: " + e.getMessage());
+            // Reset state if banana image not found
+            easterEggActivated = false;
+            photoClickCount = 0;
+        }
     }
 
     /**
@@ -376,7 +490,6 @@ public class AboutDialog {
                 "✓ Trascrizione audio in tempo reale",
                 "✓ Registrazione audio di sistema e microfono",
                 "✓ Integrazione ChatGPT",
-                "✓ Supporto per sorgenti audio multiple"
         };
 
         for (String feature : features) {
@@ -398,7 +511,7 @@ public class AboutDialog {
      */
     private VBox createWhatsNewSection() {
         VBox whatsNewBox = new VBox(15);
-        whatsNewBox.setPadding(new Insets(15, 30, 15, 30));
+        whatsNewBox.setPadding(new Insets(20, 30, 20, 30));
         whatsNewBox.setStyle(
                 "-fx-background-color: #f9fafb; " +
                         "-fx-border-color: " + UIConstants.BORDER_COLOR + "; " +
@@ -444,16 +557,27 @@ public class AboutDialog {
             return whatsNewBox;
         }
 
-        // Create container for the latest version only
+        // Create scrollable content
         VBox versionsContainer = new VBox(15);
 
-        // Show only the first (latest) version
-        if (!latestVersions.isEmpty()) {
-            VBox versionBox = createVersionBox(latestVersions.get(0));
+        for (ChangelogVersion version : latestVersions) {
+            VBox versionBox = createVersionBox(version);
             versionsContainer.getChildren().add(versionBox);
         }
 
-        whatsNewBox.getChildren().addAll(headerBox, versionsContainer);
+        // Wrap in scroll pane if content is long
+        ScrollPane scrollPane = new ScrollPane(versionsContainer);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setMaxHeight(200);
+        scrollPane.setStyle(
+                "-fx-background-color: transparent; " +
+                        "-fx-background: transparent; " +
+                        "-fx-border-color: transparent;"
+        );
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        whatsNewBox.getChildren().addAll(headerBox, scrollPane);
 
         return whatsNewBox;
     }
@@ -529,7 +653,7 @@ public class AboutDialog {
     private VBox createFooter() {
         VBox footer = new VBox(10);
         footer.setAlignment(Pos.CENTER);
-        footer.setPadding(new Insets(15, 20, 15, 20));
+        footer.setPadding(new Insets(20, 20, 20, 20));
         footer.setStyle(
                 "-fx-background-color: " + UIConstants.BACKGROUND_COLOR + "; " +
                         "-fx-border-color: " + UIConstants.BORDER_COLOR + "; " +
